@@ -568,6 +568,12 @@ class OdontologiaController extends Controller
     // ODONTOGRAMA ESTADOS
     // ==========================================
 
+    public function indexCatalogoOdontograma(): JsonResponse
+    {
+        $catalogo = OdontogramaOdontologia::with('carillas')->get();
+        return response()->json(['data' => $catalogo, 'message' => 'Catálogo de odontograma retrieved']);
+    }
+
     public function indexEstadoOdontograma(): JsonResponse
     {
         $estados = OdontogramaEstado::all();
@@ -658,6 +664,45 @@ class OdontologiaController extends Controller
 
         return response()->json(['data' => $odontograma, 'message' => 'Odontograma created'], 201);
     }
+
+    public function syncOdontogramaPaciente(Request $request, int $pacienteId): JsonResponse
+    {
+        $request->validate([
+            'asignaciones' => 'present|array',
+            'asignaciones.*.id_numero_pieza' => 'required|integer|exists:odontograma_odontologia,id',
+            'asignaciones.*.id_numero_carilla' => 'nullable|integer|exists:odontograma_pieza_carilla_odontologia,id',
+            'asignaciones.*.id_estado' => 'required|integer|exists:odontograma_estado_odontologia,id',
+            'asignaciones.*.fecha' => 'nullable|date',
+        ]);
+
+        $odontograma = OdontogramaPaciente::firstOrCreate([
+            'id_usuario_paciente' => $pacienteId,
+        ]);
+
+        $fechaDefault = today()->toDateString();
+
+        DB::transaction(function () use ($odontograma, $request, $fechaDefault) {
+            OdontogramaAsignacion::where('id_odontograma_paciente', $odontograma->id)->delete();
+
+            foreach ($request->asignaciones as $item) {
+                OdontogramaAsignacion::create([
+                    'id_odontograma_paciente' => $odontograma->id,
+                    'id_numero_pieza' => $item['id_numero_pieza'],
+                    'id_numero_carilla' => $item['id_numero_carilla'] ?? null,
+                    'id_estado' => $item['id_estado'],
+                    'fecha' => !empty($item['fecha']) ? $item['fecha'] : $fechaDefault,
+                ]);
+            }
+        });
+
+        $odontograma->load(['asignaciones.pieza', 'asignaciones.carilla', 'asignaciones.estado']);
+
+        return response()->json([
+            'data' => $odontograma,
+            'message' => 'Odontograma sincronizado exitosamente'
+        ]);
+    }
+
 
     // ==========================================
     // ODONTOGRAMA ASIGNACIONES

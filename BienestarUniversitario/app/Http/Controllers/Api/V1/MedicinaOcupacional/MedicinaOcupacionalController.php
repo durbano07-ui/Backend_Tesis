@@ -36,6 +36,10 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\View;
+use Dompdf\Dompdf;
+use Carbon\Carbon;
 
 class MedicinaOcupacionalController extends Controller
 {
@@ -151,29 +155,57 @@ class MedicinaOcupacionalController extends Controller
 
     public function indexUsuarioLugarDeTrabajo(Request $request): JsonResponse
     {
-        $query = UsuarioLugarDeTrabajo::query()->with('usuario');
-        if ($request->has('id_usuario')) {
-            $query->where('id_usuario', $request->id_usuario);
+        $query = UsuarioLugarDeTrabajo::query()->with(['usuario', 'lugarTrabajo']);
+        
+        $userId = $request->id_usuario;
+        if (!$userId && $request->user()) {
+            if (!$request->user()->hasRole('administrador')) {
+                $userId = $request->user()->id;
+            }
         }
+        
+        if ($userId) {
+            $query->where('id_usuario', $userId);
+        }
+
         $data = $query->orderBy('id', 'desc')->get();
         return response()->json(['data' => $data, 'message' => 'Usuario lugar de trabajo retrieved']);
     }
 
     public function showUsuarioLugarDeTrabajo(int $id): JsonResponse
     {
-        $data = UsuarioLugarDeTrabajo::with('usuario')->find($id);
+        $data = UsuarioLugarDeTrabajo::with(['usuario', 'lugarTrabajo'])->find($id);
         if (!$data) return response()->json(['message' => 'Not found'], 404);
         return response()->json(['data' => $data, 'message' => 'Usuario lugar de trabajo retrieved']);
     }
 
     public function storeUsuarioLugarDeTrabajo(Request $request): JsonResponse
     {
+        $userId = $request->id_usuario ?? $request->user()?->id;
+        $request->merge(['id_usuario' => $userId]);
+
         $request->validate([
             'id_usuario' => 'required|integer|exists:users,id',
-            'id_lugar_trabajo' => 'required|string|max:255',
+            'id_lugar_trabajo' => 'required',
         ]);
-        $data = UsuarioLugarDeTrabajo::create($request->only(['id_usuario', 'id_lugar_trabajo']));
-        return response()->json(['data' => $data->load('usuario'), 'message' => 'Created'], 201);
+
+        $existing = UsuarioLugarDeTrabajo::where('id_usuario', $userId)
+            ->where('id_lugar_trabajo', $request->id_lugar_trabajo)
+            ->first();
+
+        if ($existing) {
+            return response()->json([
+                'data' => $existing->load(['usuario', 'lugarTrabajo']),
+                'message' => 'Campus ya asignado'
+            ], 200);
+        }
+
+        $data = UsuarioLugarDeTrabajo::create([
+            'id_usuario' => $userId,
+            'id_lugar_trabajo' => $request->id_lugar_trabajo,
+        ]);
+
+        return response()->json(['data' => $data->load(['usuario', 'lugarTrabajo']), 'message' => 'Created'], 201);
     }
 
     public function updateUsuarioLugarDeTrabajo(Request $request, int $id): JsonResponse
@@ -310,19 +342,96 @@ class MedicinaOcupacionalController extends Controller
     // ORDEN DE EXAMEN
     // ==========================================
 
+    public function getCatalogoExamenes(): JsonResponse
+    {
+        $grupos = GrupoTipoExamenMedicoocupacional::with(['tiposExamen' => function ($q) {
+            $q->where('activo', true)->orderBy('id', 'asc');
+        }])->where('activo', true)->orderBy('id', 'asc')->get();
+
+        $col1Nombres = ['HEMATOLOGÍA', 'PERFIL DE ANEMIA', 'PERFIL LIPÍDICO', 'ORINA'];
+        $col2Nombres = ['BIOQUÍMICOS', 'ENZIMAS', 'ELECTROLITOS', 'HECES'];
+        $col3Nombres = ['HORMONAS', 'EXUDADO VAGINAL/URETRAL'];
+
+        $formatGrupo = function ($g) {
+            return [
+                'id' => $g->id,
+                'nombre' => $g->detalle_grupo,
+                'items' => $g->tiposExamen->map(fn($t) => [
+                    'id' => $t->id,
+                    'nombre' => $t->detalle_tipo,
+                ])->values(),
+            ];
+        };
+
+        $columna1 = $grupos->filter(fn($g) => in_array($g->detalle_grupo, $col1Nombres))
+            ->sortBy(fn($g) => array_search($g->detalle_grupo, $col1Nombres))
+            ->map($formatGrupo)->values();
+
+        $columna2 = $grupos->filter(fn($g) => in_array($g->detalle_grupo, $col2Nombres))
+            ->sortBy(fn($g) => array_search($g->detalle_grupo, $col2Nombres))
+            ->map($formatGrupo)->values();
+
+        $columna3 = $grupos->filter(fn($g) => in_array($g->detalle_grupo, $col3Nombres))
+            ->sortBy(fn($g) => array_search($g->detalle_grupo, $col3Nombres))
+            ->map($formatGrupo)->values();
+
+        return response()->json([
+            'columna1' => $columna1,
+            'columna2' => $columna2,
+            'columna3' => $columna3,
+            'todos_grupos' => $grupos->map($formatGrupo)->values(),
+        ]);
+    }
+
     public function indexOrdenExamen(Request $request): JsonResponse
     {
-        $query = OrdenDeExamenMedicoocupacional::query()->with(['doctor', 'paciente']);
-        if ($request->has('id_usuario_paciente')) {
+        $query = OrdenDeExamenMedicoocupacional::query()
+            ->with([
+                'doctor.datosIdentificacion',
+                'paciente.datosIdentificacion',
+                'tiposExamen.tipoExamen.grupo',
+                'otros'
+            ]);
+
+        if ($request->filled('id_usuario_paciente')) {
             $query->where('id_usuario_paciente', $request->id_usuario_paciente);
         }
-        $data = $query->orderBy('fecha', 'desc')->get();
+
+        if ($request->filled('estado') && $request->estado !== 'all') {
+            $query->where('estado', $request->estado);
+        }
+
+        if ($request->filled('fecha')) {
+            $query->whereDate('fecha', $request->fecha);
+        }
+
+        if ($request->filled('search')) {
+            $term = $request->search;
+            $query->where(function ($q) use ($term) {
+                $q->whereHas('paciente', function ($pq) use ($term) {
+                    $pq->where('name', 'like', "%{$term}%")
+                       ->orWhere('email', 'like', "%{$term}%");
+                })->orWhereHas('paciente.datosIdentificacion', function ($dq) use ($term) {
+                    $dq->where('primer_nombre', 'like', "%{$term}%")
+                       ->orWhere('apellido_paterno', 'like', "%{$term}%")
+                       ->orWhere('numero_cedula', 'like', "%{$term}%");
+                });
+            });
+        }
+
+        $data = $query->orderBy('fecha', 'desc')->orderBy('id', 'desc')->get();
         return response()->json(['data' => $data, 'message' => 'Orden de examen retrieved']);
     }
 
     public function showOrdenExamen(int $id): JsonResponse
     {
-        $data = OrdenDeExamenMedicoocupacional::with(['doctor', 'paciente', 'tiposExamen.tipoExamen', 'otros'])->find($id);
+        $data = OrdenDeExamenMedicoocupacional::with([
+            'doctor.datosIdentificacion',
+            'paciente.datosIdentificacion',
+            'tiposExamen.tipoExamen.grupo',
+            'otros'
+        ])->find($id);
+
         if (!$data) return response()->json(['message' => 'Not found'], 404);
         return response()->json(['data' => $data, 'message' => 'Orden de examen retrieved']);
     }
@@ -332,14 +441,86 @@ class MedicinaOcupacionalController extends Controller
         $request->validate([
             'id_usuario_paciente' => 'required|integer|exists:users,id',
             'fecha' => 'required|date',
+            'observaciones' => 'nullable|string',
+            'tipos_examen' => 'nullable|array',
+            'tipos_examen.*' => 'integer|exists:tipo_examen_medicoocupacional,id',
+            'otros_examenes' => 'nullable|array',
+            'otros_examenes.*' => 'string|max:255',
         ]);
+
         $user = Auth::user();
-        $data = OrdenDeExamenMedicoocupacional::create([
-            'id_usuario_doctor' => $user->id,
-            'id_usuario_paciente' => $request->id_usuario_paciente,
-            'fecha' => $request->fecha,
+
+        $orden = DB::transaction(function () use ($request, $user) {
+            $orden = OrdenDeExamenMedicoocupacional::create([
+                'id_usuario_doctor' => $user->id,
+                'id_usuario_paciente' => $request->id_usuario_paciente,
+                'fecha' => $request->fecha,
+                'observaciones' => $request->observaciones,
+                'estado' => 'Pendiente',
+            ]);
+
+            if ($request->has('tipos_examen') && is_array($request->tipos_examen)) {
+                $inserts = [];
+                $now = now();
+                foreach (array_unique($request->tipos_examen) as $tipoId) {
+                    $inserts[] = [
+                        'id_orden_examen' => $orden->id,
+                        'id_tipo_examen' => $tipoId,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ];
+                }
+                if (!empty($inserts)) {
+                    OrdenDeExamenTipoMedicoocupacional::insert($inserts);
+                }
+            }
+
+            if ($request->has('otros_examenes') && is_array($request->otros_examenes)) {
+                $otrosInserts = [];
+                $now = now();
+                foreach ($request->otros_examenes as $otro) {
+                    $otroTrim = trim($otro);
+                    if (!empty($otroTrim)) {
+                        $otrosInserts[] = [
+                            'id_orden_examen' => $orden->id,
+                            'detalle_otro_examen' => $otroTrim,
+                            'created_at' => $now,
+                            'updated_at' => $now,
+                        ];
+                    }
+                }
+                if (!empty($otrosInserts)) {
+                    OrdenDeExamenOtrosMedicoocupacional::insert($otrosInserts);
+                }
+            }
+
+            return $orden;
+        });
+
+        $orden->load([
+            'doctor.datosIdentificacion',
+            'paciente.datosIdentificacion',
+            'tiposExamen.tipoExamen.grupo',
+            'otros'
         ]);
-        return response()->json(['data' => $data->load(['doctor', 'paciente']), 'message' => 'Created'], 201);
+
+        return response()->json([
+            'data' => $orden,
+            'message' => 'Orden de examen emitida con éxito'
+        ], 201);
+    }
+
+    public function updateEstadoOrdenExamen(int $id, Request $request): JsonResponse
+    {
+        $orden = OrdenDeExamenMedicoocupacional::find($id);
+        if (!$orden) return response()->json(['message' => 'Not found'], 404);
+
+        $request->validate([
+            'estado' => 'required|string|in:Pendiente,Realizado',
+        ]);
+
+        $orden->update(['estado' => $request->estado]);
+        return response()->json(['data' => $orden, 'message' => 'Estado actualizado']);
     }
 
     public function updateOrdenExamen(Request $request, int $id): JsonResponse
@@ -349,8 +530,10 @@ class MedicinaOcupacionalController extends Controller
         $request->validate([
             'id_usuario_paciente' => 'sometimes|integer|exists:users,id',
             'fecha' => 'sometimes|date',
+            'observaciones' => 'sometimes|nullable|string',
+            'estado' => 'sometimes|string',
         ]);
-        $data->update($request->only(['id_usuario_paciente', 'fecha']));
+        $data->update($request->only(['id_usuario_paciente', 'fecha', 'observaciones', 'estado']));
         return response()->json(['data' => $data->load(['doctor', 'paciente']), 'message' => 'Updated']);
     }
 
@@ -360,6 +543,115 @@ class MedicinaOcupacionalController extends Controller
         if (!$data) return response()->json(['message' => 'Not found'], 404);
         $data->delete();
         return response()->json(['message' => 'Deleted']);
+    }
+
+    public function descargarPdfOrdenExamen(int $id)
+    {
+        $orden = OrdenDeExamenMedicoocupacional::with([
+            'doctor.datosIdentificacion',
+            'paciente.datosIdentificacion',
+            'tiposExamen.tipoExamen',
+            'otros'
+        ])->find($id);
+
+        if (!$orden) {
+            return response()->json(['message' => 'Orden no encontrada'], 404);
+        }
+
+        // Logo base64
+        $logoPath = public_path('images/ueb.png');
+        $logoBase64 = file_exists($logoPath)
+            ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoPath))
+            : null;
+
+        // Paciente info
+        $paciente = $orden->paciente;
+        $pIdent = $paciente?->datosIdentificacion;
+        $pacienteNombre = $pIdent
+            ? trim("{$pIdent->primer_nombre} {$pIdent->segundo_nombre} {$pIdent->apellido_paterno} {$pIdent->apellido_materno}")
+            : ($paciente?->name ?? '—');
+        $pacienteCedula = $pIdent?->numero_cedula ?? '—';
+        $pacienteEdad = $pIdent?->fecha_nacimiento
+            ? Carbon::parse($pIdent->fecha_nacimiento)->age
+            : null;
+
+        // Doctor info
+        $doctor = $orden->doctor;
+        $dIdent = $doctor?->datosIdentificacion;
+        $doctorNombre = $dIdent
+            ? trim("{$dIdent->primer_nombre} {$dIdent->segundo_nombre} {$dIdent->apellido_paterno} {$dIdent->apellido_materno}")
+            : ($doctor?->name ?? 'Dr. Médico Ocupacional');
+
+        // Selected exam IDs
+        $selectedIds = $orden->tiposExamen->pluck('id_tipo_examen')->toArray();
+
+        // Catalog categories for 3 columns
+        $grupos = GrupoTipoExamenMedicoocupacional::with(['tiposExamen' => function ($q) {
+            $q->where('activo', true)->orderBy('id', 'asc');
+        }])->where('activo', true)->orderBy('id', 'asc')->get();
+
+        $col1Nombres = ['HEMATOLOGÍA', 'PERFIL DE ANEMIA', 'PERFIL LIPÍDICO', 'ORINA'];
+        $col2Nombres = ['BIOQUÍMICOS', 'ENZIMAS', 'ELECTROLITOS', 'HECES'];
+        $col3Nombres = ['HORMONAS', 'EXUDADO VAGINAL/URETRAL'];
+
+        $formatGrupo = function ($g) {
+            return [
+                'id' => $g->id,
+                'nombre' => $g->detalle_grupo,
+                'items' => $g->tiposExamen->map(fn($t) => [
+                    'id' => $t->id,
+                    'nombre' => $t->detalle_tipo,
+                ])->toArray(),
+            ];
+        };
+
+        $columna1 = $grupos->filter(fn($g) => in_array($g->detalle_grupo, $col1Nombres))
+            ->sortBy(fn($g) => array_search($g->detalle_grupo, $col1Nombres))
+            ->map($formatGrupo)->values()->toArray();
+
+        $columna2 = $grupos->filter(fn($g) => in_array($g->detalle_grupo, $col2Nombres))
+            ->sortBy(fn($g) => array_search($g->detalle_grupo, $col2Nombres))
+            ->map($formatGrupo)->values()->toArray();
+
+        $columna3 = $grupos->filter(fn($g) => in_array($g->detalle_grupo, $col3Nombres))
+            ->sortBy(fn($g) => array_search($g->detalle_grupo, $col3Nombres))
+            ->map($formatGrupo)->values()->toArray();
+
+        $otrosExamenes = $orden->otros->pluck('detalle_otro_examen')->toArray();
+
+        $html = View::make('pdf.orden_examen_ocupacional', [
+            'orden' => $orden,
+            'logoBase64' => $logoBase64,
+            'pacienteNombre' => $pacienteNombre,
+            'pacienteCedula' => $pacienteCedula,
+            'pacienteEdad' => $pacienteEdad,
+            'doctorNombre' => $doctorNombre,
+            'fecha' => $orden->fecha,
+            'selectedIds' => $selectedIds,
+            'columna1' => $columna1,
+            'columna2' => $columna2,
+            'columna3' => $columna3,
+            'otrosExamenes' => $otrosExamenes,
+            'observaciones' => $orden->observaciones,
+        ])->render();
+
+        $dompdf = new Dompdf();
+        $dompdf->loadHtml($html);
+        $dompdf->setPaper('A4', 'portrait');
+        $dompdf->render();
+
+        $filename = "Orden_Examenes_UEB_{$orden->id}_{$pacienteCedula}.pdf";
+
+        return response()->streamDownload(
+            function () use ($dompdf) {
+                echo $dompdf->output();
+            },
+            $filename,
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . $filename . '"',
+            ]
+        );
     }
 
     // ==========================================

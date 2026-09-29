@@ -238,10 +238,10 @@ class ReferenceDataSeeder extends Seeder
     private function lugarTrabajo(): void
     {
         $lugares = [
-            'Matriz Guaranda',
-            'Extensión Laguacoto',
-            'Extensión Chimbo',
-            'Extensión San Miguel',
+            'Campus Guanujo',
+            'Campus Laguacoto',
+            'Campus San Miguel',
+            'Campus Chimbo',
         ];
 
         foreach ($lugares as $nombre) {

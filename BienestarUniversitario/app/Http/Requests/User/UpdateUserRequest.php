@@ -15,6 +15,28 @@ class UpdateUserRequest extends FormRequest
     }
 
     /**
+     * Prepare the data for validation.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('roles') && is_array($this->roles)) {
+            $roleMap = [
+                'estudiante' => 'paciente',
+                'docente' => 'paciente',
+                'administrativo' => 'paciente',
+                'codigo_trabajo' => 'paciente',
+            ];
+            $normalizedRoles = array_map(function ($role) use ($roleMap) {
+                return $roleMap[$role] ?? $role;
+            }, $this->roles);
+
+            $this->merge([
+                'roles' => array_values(array_unique($normalizedRoles)),
+            ]);
+        }
+    }
+
+    /**
      * Get the validation rules that apply to the request.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>

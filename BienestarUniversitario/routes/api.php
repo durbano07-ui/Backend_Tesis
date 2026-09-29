@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\SecurityLogController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\UserProfile\UserProfileController;
 use App\Http\Controllers\Api\V1\UserProfile\UserProfilePhotoController;
+use App\Http\Controllers\Api\V1\NotificationController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -62,6 +63,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/users', [UserController::class, 'store']);
             Route::post('/users/register-patient', [UserController::class, 'registerPatient']);
             Route::get('/users/search-by-cedula', [UserController::class, 'searchByCedula']);
+            Route::get('/patients/search', [UserController::class, 'searchByCedula']);
             Route::get('/users/{user}', [UserController::class, 'show']);
             Route::put('/users/{user}', [UserController::class, 'update']);
             Route::put('/users/{user}/disable', [UserController::class, 'disable']);
@@ -285,6 +287,9 @@ Route::prefix('v1/medicina-general')->middleware(['auth:sanctum', 'force_passwor
 
 // Medicina Ocupacional
 Route::prefix('v1/medicina-ocupacional')->middleware(['auth:sanctum', 'force_password_change'])->group(function () {
+    // Campus (Lugar de Trabajo)
+    Route::get('/campus', [CampusManagementController::class, 'indexCampus']);
+
     // Cargos
     Route::get('/cargos', [MedicinaOcupacionalController::class, 'indexCargos']);
     Route::get('/cargos/{id}', [MedicinaOcupacionalController::class, 'showCargo']);
@@ -320,9 +325,14 @@ Route::prefix('v1/medicina-ocupacional')->middleware(['auth:sanctum', 'force_pas
     Route::put('/tipo-examen/{id}', [MedicinaOcupacionalController::class, 'updateTipoExamen']);
     Route::delete('/tipo-examen/{id}', [MedicinaOcupacionalController::class, 'destroyTipoExamen']);
 
+    // Catalogo de examenes ocupacionales
+    Route::get('/examenes/catalogo', [MedicinaOcupacionalController::class, 'getCatalogoExamenes']);
+
     // Orden de examen
     Route::get('/orden-examen', [MedicinaOcupacionalController::class, 'indexOrdenExamen']);
     Route::get('/orden-examen/{id}', [MedicinaOcupacionalController::class, 'showOrdenExamen']);
+    Route::get('/orden-examen/{id}/pdf', [MedicinaOcupacionalController::class, 'descargarPdfOrdenExamen']);
+    Route::put('/orden-examen/{id}/estado', [MedicinaOcupacionalController::class, 'updateEstadoOrdenExamen']);
     Route::post('/orden-examen', [MedicinaOcupacionalController::class, 'storeOrdenExamen']);
     Route::put('/orden-examen/{id}', [MedicinaOcupacionalController::class, 'updateOrdenExamen']);
     Route::delete('/orden-examen/{id}', [MedicinaOcupacionalController::class, 'destroyOrdenExamen']);
@@ -656,6 +666,9 @@ Route::prefix('v1/odontologia')->middleware(['auth:sanctum', 'force_password_cha
     Route::put('/insumos-paciente/{id}', [OdontologiaController::class, 'updateInsumosPaciente']);
     Route::delete('/insumos-paciente/{id}', [OdontologiaController::class, 'destroyInsumosPaciente']);
 
+    // Odontograma Catálogo
+    Route::get('/odontograma-catalogo', [OdontologiaController::class, 'indexCatalogoOdontograma']);
+
     // Odontograma Estados
     Route::get('/odontograma-estados', [OdontologiaController::class, 'indexEstadoOdontograma']);
     Route::get('/odontograma-estados/{id}', [OdontologiaController::class, 'showEstadoOdontograma']);
@@ -666,6 +679,7 @@ Route::prefix('v1/odontologia')->middleware(['auth:sanctum', 'force_password_cha
     // Odontograma Paciente
     Route::get('/odontograma-paciente/{pacienteId}', [OdontologiaController::class, 'showOdontogramaPaciente']);
     Route::post('/odontograma-paciente', [OdontologiaController::class, 'storeOdontogramaPaciente']);
+    Route::post('/odontograma-paciente/{pacienteId}/sync', [OdontologiaController::class, 'syncOdontogramaPaciente']);
 
     // Odontograma Asignaciones
     Route::get('/odontograma-asignaciones', [OdontologiaController::class, 'indexAsignacionOdontograma']);
@@ -698,6 +712,15 @@ Route::prefix('v1/citas-medicas')->middleware(['auth:sanctum', 'force_password_c
     Route::patch('/{id}/confirmar', [CitasMedicasController::class, 'confirmar']);
     Route::patch('/{id}/completar', [CitasMedicasController::class, 'completar']);
 });
+
+// Notificaciones
+Route::prefix('v1/notificaciones')->middleware(['auth:sanctum', 'force_password_change'])->group(function () {
+    Route::get('/', [NotificationController::class, 'index']);
+    Route::patch('/marcar-todas-leidas', [NotificationController::class, 'markAllAsRead']);
+    Route::patch('/{id}/leer', [NotificationController::class, 'markAsRead']);
+    Route::delete('/{id}', [NotificationController::class, 'destroy']);
+});
+
 
 // ==========================================
 // FARMACIA

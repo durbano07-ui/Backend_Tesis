@@ -12,6 +12,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
+use App\Notifications\CitaMedicaNotification;
+use Illuminate\Support\Facades\Log;
 
 class CitasMedicasController extends Controller
 {
@@ -29,20 +31,35 @@ class CitasMedicasController extends Controller
     private const ROLES_ABIERTOS = ['medico_general', 'psicologo', 'odontologo'];
 
     /**
-     * Tipos de usuario que pueden agendar con medico ocupacional
+     * Tipos de usuario que pueden agendar con medico ocupacional (Personal UEB)
      */
-    private const TIPOS_USUARIO_PUEDE_AGENDAR_OCUPACIONAL = ['Docente', 'Código de Trabajo'];
+    private const TIPOS_USUARIO_PUEDE_AGENDAR_OCUPACIONAL = ['Docente', 'Administrativo', 'Código de Trabajo'];
+
+    /**
+     * Tipos de usuario que pueden agendar en clinica general (Estudiantes)
+     */
+    private const TIPOS_USUARIO_PUEDE_AGENDAR_CLINICA_GENERAL = ['Estudiante'];
 
     /**
      * Verificar si un usuario puede agendar con medico ocupacional
      */
     private function puedeAgendarOcupacional($user): bool
     {
-        // Verificar si tiene estudioCarrera y tipo_usuario
         if ($user->estudioCarrera && $user->estudioCarrera->tipoUsuario) {
             return in_array($user->estudioCarrera->tipoUsuario->nombre, self::TIPOS_USUARIO_PUEDE_AGENDAR_OCUPACIONAL);
         }
         return false;
+    }
+
+    /**
+     * Verificar si un usuario puede agendar con médicos de clínica general (estudiantes)
+     */
+    private function puedeAgendarClinicaGeneral($user): bool
+    {
+        if ($user->estudioCarrera && $user->estudioCarrera->tipoUsuario) {
+            return in_array($user->estudioCarrera->tipoUsuario->nombre, self::TIPOS_USUARIO_PUEDE_AGENDAR_CLINICA_GENERAL);
+        }
+        return true;
     }
 
     /**
@@ -177,14 +194,28 @@ class CitasMedicasController extends Controller
         $user = Auth::user();
         $rolDoctor = $request->rol_doctor;
 
-        // Si es medico ocupacional, verificar que el usuario tenga el tipo adecuado
+        // Si es medico ocupacional, verificar que el usuario sea personal universitario
         if ($rolDoctor === 'medico_ocupacional') {
             if (!$this->puedeAgendarOcupacional($user)) {
                 return response()->json([
                     'data' => [
                         'acceder' => false,
                         'rol_doctor' => $rolDoctor,
-                        'mensaje' => 'Solo usuarios tipo Docente o Código de Trabajo pueden agendar con médico ocupacional',
+                        'mensaje' => 'La atención con médico ocupacional está destinada exclusivamente a personal docente, administrativo o de servicios.',
+                    ],
+                    'message' => 'Access denied',
+                ], 403);
+            }
+        }
+
+        // Si es clinica general (médico general, psicólogo, odontólogo), verificar que sea estudiante
+        if (in_array($rolDoctor, self::ROLES_ABIERTOS)) {
+            if (!$this->puedeAgendarClinicaGeneral($user)) {
+                return response()->json([
+                    'data' => [
+                        'acceder' => false,
+                        'rol_doctor' => $rolDoctor,
+                        'mensaje' => 'La atención con médicos generales, psicólogos y odontólogos está dirigida exclusivamente a estudiantes. El personal institucional debe solicitar atención con Medicina Ocupacional.',
                     ],
                     'message' => 'Access denied',
                 ], 403);
@@ -217,7 +248,17 @@ class CitasMedicasController extends Controller
             if (!$this->puedeAgendarOcupacional($user)) {
                 return response()->json([
                     'data' => [],
-                    'message' => 'No tienes acceso a médicos ocupacionales',
+                    'message' => 'El servicio de medicina ocupacional está destinado exclusivamente al personal docente, administrativo y de servicios.',
+                ]);
+            }
+        }
+
+        // Verificar acceso a clinica general para estudiantes
+        if (in_array($rol, self::ROLES_ABIERTOS)) {
+            if (!$this->puedeAgendarClinicaGeneral($user)) {
+                return response()->json([
+                    'data' => [],
+                    'message' => 'La atención con este especialista está reservada exclusivamente para estudiantes.',
                 ]);
             }
         }
@@ -248,7 +289,16 @@ class CitasMedicasController extends Controller
         if ($rolDoctor === 'medico_ocupacional') {
             if (!$this->puedeAgendarOcupacional($user)) {
                 return response()->json([
-                    'message' => 'Solo usuarios tipo Docente o Código de Trabajo pueden agendar con médico ocupacional',
+                    'message' => 'Solo el personal docente, administrativo o de código de trabajo puede agendar citas con medicina ocupacional.',
+                ], 403);
+            }
+        }
+
+        // Verificar acceso a clinica general
+        if (in_array($rolDoctor, self::ROLES_ABIERTOS)) {
+            if (!$this->puedeAgendarClinicaGeneral($user)) {
+                return response()->json([
+                    'message' => 'La atención con médicos generales, odontólogos y psicólogos está reservada para estudiantes. El personal universitario debe agendar con Medicina Ocupacional.',
                 ], 403);
             }
         }
@@ -334,6 +384,32 @@ class CitasMedicasController extends Controller
             'motivo' => $request->motivo,
         ]);
 
+        try {
+            $cita->load(['doctor.datosIdentificacion', 'paciente.datosIdentificacion']);
+            $pIdent = $cita->paciente?->datosIdentificacion;
+            $pacienteNombre = $pIdent ? trim("{$pIdent->primer_nombre} {$pIdent->apellido_paterno}") : ($cita->paciente?->name ?? "Paciente");
+            $dIdent = $cita->doctor?->datosIdentificacion;
+            $doctorNombre = $dIdent ? trim("{$dIdent->primer_nombre} {$dIdent->apellido_paterno}") : ($cita->doctor?->name ?? "Especialista");
+
+            // Notificar al Doctor
+            $doctor->notify(new CitaMedicaNotification(
+                'nueva_cita',
+                'Nueva Cita Agendada',
+                "El paciente {$pacienteNombre} agendó cita para el {$cita->fecha} a las {$cita->hora_inicio}.",
+                $cita
+            ));
+
+            // Notificar al Paciente
+            $user->notify(new CitaMedicaNotification(
+                'cita_agendada',
+                'Cita Reservada con Éxito',
+                "Tu cita con {$doctorNombre} ha sido reservada para el {$cita->fecha} a las {$cita->hora_inicio}.",
+                $cita
+            ));
+        } catch (\Throwable $e) {
+            Log::error("Error al notificar cita médica agendada: " . $e->getMessage());
+        }
+
         return response()->json([
             'data' => $cita->load(['doctor.datosIdentificacion', 'paciente.datosIdentificacion']),
             'message' => 'Cita agendada exitosamente',
@@ -364,6 +440,34 @@ class CitasMedicasController extends Controller
         }
 
         $cita->update(['estado' => 'cancelada']);
+
+        try {
+            $cita->load(['doctor.datosIdentificacion', 'paciente.datosIdentificacion']);
+            $pIdent = $cita->paciente?->datosIdentificacion;
+            $pacienteNombre = $pIdent ? trim("{$pIdent->primer_nombre} {$pIdent->apellido_paterno}") : ($cita->paciente?->name ?? "Paciente");
+            $dIdent = $cita->doctor?->datosIdentificacion;
+            $doctorNombre = $dIdent ? trim("{$dIdent->primer_nombre} {$dIdent->apellido_paterno}") : ($cita->doctor?->name ?? "Especialista");
+
+            if ($user->id === $cita->id_usuario_paciente) {
+                // Canceló el paciente -> notificar al doctor
+                $cita->doctor?->notify(new CitaMedicaNotification(
+                    'cita_cancelada',
+                    'Cita Cancelada por Paciente',
+                    "El paciente {$pacienteNombre} canceló su cita del {$cita->fecha} a las {$cita->hora_inicio}.",
+                    $cita
+                ));
+            } else {
+                // Canceló el doctor -> notificar al paciente
+                $cita->paciente?->notify(new CitaMedicaNotification(
+                    'cita_cancelada',
+                    'Cita Cancelada',
+                    "Tu cita con {$doctorNombre} del {$cita->fecha} a las {$cita->hora_inicio} ha sido cancelada.",
+                    $cita
+                ));
+            }
+        } catch (\Throwable $e) {
+            Log::error("Error al notificar cancelación de cita: " . $e->getMessage());
+        }
 
         return response()->json([
             'data' => $cita->load(['doctor.datosIdentificacion', 'paciente.datosIdentificacion']),
@@ -423,6 +527,22 @@ class CitasMedicasController extends Controller
             'estado' => 'completada',
             'notas_doctor' => $cita->notas_doctor,
         ]);
+
+        try {
+            $cita->load(['doctor.datosIdentificacion', 'paciente.datosIdentificacion']);
+            $dIdent = $cita->doctor?->datosIdentificacion;
+            $doctorNombre = $dIdent ? trim("{$dIdent->primer_nombre} {$dIdent->apellido_paterno}") : ($cita->doctor?->name ?? "Especialista");
+
+            // Notificar al Paciente
+            $cita->paciente?->notify(new CitaMedicaNotification(
+                'atencion_completada',
+                'Atención Médica Completada',
+                "Tu atención médica con {$doctorNombre} ha sido completada satisfactoriamente.",
+                $cita
+            ));
+        } catch (\Throwable $e) {
+            Log::error("Error al notificar atención completada: " . $e->getMessage());
+        }
 
         return response()->json([
             'data' => $cita->load(['doctor.datosIdentificacion', 'paciente.datosIdentificacion']),
@@ -532,6 +652,22 @@ class CitasMedicasController extends Controller
             'fecha_confirmacion' => now(),
         ]);
 
+        try {
+            $cita->load(['doctor.datosIdentificacion', 'paciente.datosIdentificacion']);
+            $pIdent = $cita->paciente?->datosIdentificacion;
+            $pacienteNombre = $pIdent ? trim("{$pIdent->primer_nombre} {$pIdent->apellido_paterno}") : ($cita->paciente?->name ?? "Paciente");
+
+            // Notificar al Doctor
+            $cita->doctor?->notify(new CitaMedicaNotification(
+                'asistencia_confirmada',
+                'Asistencia Confirmada',
+                "El paciente {$pacienteNombre} confirmó su asistencia para la cita del {$cita->fecha} a las {$cita->hora_inicio}.",
+                $cita
+            ));
+        } catch (\Throwable $e) {
+            Log::error("Error al notificar confirmación de asistencia: " . $e->getMessage());
+        }
+
         return response()->json([
             'data' => $cita->load(['doctor.datosIdentificacion', 'paciente.datosIdentificacion']),
             'message' => 'Asistencia confirmada exitosamente',
@@ -609,8 +745,15 @@ class CitasMedicasController extends Controller
      */
     public function doctoresDisponibles(): JsonResponse
     {
-        $doctores = User::whereHas('roles', function ($q) {
-            $q->whereIn('name', ['medico_general', 'psicologo', 'odontologo', 'medico_ocupacional']);
+        $user = Auth::user();
+        $isStaff = $this->puedeAgendarOcupacional($user);
+
+        $doctores = User::whereHas('roles', function ($q) use ($isStaff) {
+            if ($isStaff) {
+                $q->where('name', 'medico_ocupacional');
+            } else {
+                $q->whereIn('name', ['medico_general', 'psicologo', 'odontologo']);
+            }
         })
         ->where('activo', true)
         ->with(['roles', 'datosIdentificacion', 'cargoMedico'])

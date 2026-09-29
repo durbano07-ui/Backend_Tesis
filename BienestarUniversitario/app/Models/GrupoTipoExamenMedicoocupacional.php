@@ -23,4 +23,9 @@ class GrupoTipoExamenMedicoocupacional extends Model
     {
         return $this->belongsTo(User::class, 'id_usuario_doctor');
     }
+
+    public function tiposExamen(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(TipoExamenMedicoocupacional::class, 'id_grupo_tipo_examen');
+    }
 }

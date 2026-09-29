@@ -478,6 +478,7 @@ class UserProfileController extends Controller
             'provincias' => \App\Models\Provincia::orderBy('nombre')->get(['id', 'nombre']),
             'cantones' => \App\Models\Canton::orderBy('nombre')->get(['id', 'nombre', 'id_provincia']),
             'tipos_direccion' => \App\Models\TipoDireccion::orderBy('nombre')->get(['id', 'nombre']),
+            'tipos_sangre' => \App\Models\TipoSangre::orderBy('id')->get(['id', 'nombre']),
         ]);
     }
 

@@ -12,7 +12,29 @@ class StoreUserRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()->hasRole(['medico_coordinador', 'administrador']);
+        return $this->user()->hasAnyRole(['medico_coordinador', 'administrador']);
+    }
+
+    /**
+     * Prepare the data for validation.
+     */
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('roles') && is_array($this->roles)) {
+            $roleMap = [
+                'estudiante' => 'paciente',
+                'docente' => 'paciente',
+                'administrativo' => 'paciente',
+                'codigo_trabajo' => 'paciente',
+            ];
+            $normalizedRoles = array_map(function ($role) use ($roleMap) {
+                return $roleMap[$role] ?? $role;
+            }, $this->roles);
+
+            $this->merge([
+                'roles' => array_values(array_unique($normalizedRoles)),
+            ]);
+        }
     }
 
     /**

@@ -15,6 +15,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Str;
+use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 
 class UserController extends Controller
 {
@@ -153,60 +155,126 @@ class UserController extends Controller
     }
 
     /**
-     * Search patient by cedula (identification number).
+     * Search patient by cedula (identification number) or name with role-based scoping.
      */
     public function searchByCedula(Request $request): JsonResponse
     {
         $request->validate([
-            'cedula' => ['required', 'string', 'max:20'],
+            'cedula' => ['nullable', 'string', 'max:50'],
+            'query' => ['nullable', 'string', 'max:50'],
+            'search' => ['nullable', 'string', 'max:50'],
+            'term' => ['nullable', 'string', 'max:50'],
         ]);
 
-        $query = $request->cedula;
+        $query = $request->cedula ?? $request->query('query') ?? $request->query('search') ?? $request->query('term') ?? '';
+        $doctor = Auth::user() ?? $request->user();
 
-        // Realizamos una búsqueda flexible por número de identificación o partes del nombre
-        $identificaciones = DatosIdentificacion::where('numero_cedula', 'like', "%{$query}%")
-            ->orWhere('primer_nombre', 'like', "%{$query}%")
-            ->orWhere('segundo_nombre', 'like', "%{$query}%")
-            ->orWhere('apellido_paterno', 'like', "%{$query}%")
-            ->orWhere('apellido_materno', 'like', "%{$query}%")
-            ->with('user')
-            ->get();
+        $identificacionesQuery = DatosIdentificacion::with([
+            'user.estudioCarrera.tipoUsuario',
+            'user.estudioCarrera.facultad',
+            'user.estudioCarrera.carrera',
+            'user.cargoMedico',
+            'user.lugaresDeTrabajo',
+            'user.roles'
+        ]);
 
+        if (!empty($query)) {
+            $identificacionesQuery->where(function ($q) use ($query) {
+                $q->where('numero_cedula', 'like', "%{$query}%")
+                    ->orWhere('primer_nombre', 'like', "%{$query}%")
+                    ->orWhere('segundo_nombre', 'like', "%{$query}%")
+                    ->orWhere('apellido_paterno', 'like', "%{$query}%")
+                    ->orWhere('apellido_materno', 'like', "%{$query}%");
+            });
+        }
 
+        // Scope filter based on doctor role and request parameters
+        $ambito = $request->get('tipo_paciente') ?? $request->get('ambito');
+
+        if ($doctor && $doctor->hasRole('medico_ocupacional')) {
+            // Medico Ocupacional: Solo personal de la institucion (Docentes, Administrativos, Codigo de Trabajo: id_tipo_usuario IN [3, 4, 5])
+            $identificacionesQuery->whereHas('user.estudioCarrera', function ($q) {
+                $q->whereIn('id_tipo_usuario', [3, 4, 5]);
+            });
+        } elseif ($doctor && $doctor->hasAnyRole(['medico_general', 'odontologo', 'psicologo', 'enfermero'])) {
+            // Medicos Clinicos Generales / Estudiantiles: Solo estudiantes (id_tipo_usuario = 2 o pacientes que no son personal institucional)
+            $identificacionesQuery->whereHas('user', function ($q) {
+                $q->whereDoesntHave('roles', function ($rq) {
+                    $rq->whereIn('name', ['enfermero', 'medico_general', 'psicologo', 'odontologo', 'medico_ocupacional', 'medico_coordinador', 'administrador']);
+                })
+                ->where(function ($sub) {
+                    $sub->whereHas('estudioCarrera', function ($eq) {
+                        $eq->where('id_tipo_usuario', 2);
+                    })
+                    ->orWhereDoesntHave('estudioCarrera');
+                });
+            });
+        } elseif ($ambito === 'ocupacional') {
+            $identificacionesQuery->whereHas('user.estudioCarrera', function ($q) {
+                $q->whereIn('id_tipo_usuario', [3, 4, 5]);
+            });
+        } elseif ($ambito === 'estudiante') {
+            $identificacionesQuery->whereHas('user', function ($q) {
+                $q->where(function ($sub) {
+                    $sub->whereHas('estudioCarrera', function ($eq) {
+                        $eq->where('id_tipo_usuario', 2);
+                    })
+                    ->orWhereDoesntHave('estudioCarrera');
+                });
+            });
+        }
+
+        $identificaciones = $identificacionesQuery->take(30)->get();
 
         $results = [];
         foreach ($identificaciones as $identificacion) {
             $user = $identificacion->user;
             if (!$user) {
-                continue; // Evitamos crash si es un registro huérfano sin usuario asociado
+                continue; // Evitamos crash si es un registro huerfano sin usuario asociado
             }
+
+            $tipoUsuario = $user->estudioCarrera?->tipoUsuario?->nombre ?? 'Estudiante';
+            $idTipoUsuario = $user->estudioCarrera?->id_tipo_usuario ?? 2;
+            $nombres = trim(($identificacion->primer_nombre ?? '') . ' ' . ($identificacion->segundo_nombre ?? ''));
+            $apellidos = trim(($identificacion->apellido_paterno ?? '') . ' ' . ($identificacion->apellido_materno ?? ''));
+            $nombreCompleto = trim("{$nombres} {$apellidos}") ?: ($user->name ?? 'Sin nombre');
+
+            $edad = null;
+            if ($identificacion->fecha_nacimiento) {
+                try {
+                    $edad = Carbon::parse($identificacion->fecha_nacimiento)->age;
+                } catch (\Throwable $e) {}
+            }
+
+            $puestoTrabajo = $user->cargoMedico?->detalle_cargo ?? ($tipoUsuario !== 'Estudiante' ? "Personal {$tipoUsuario}" : 'Estudiante');
+            $lugarTrabajo = $user->lugaresDeTrabajo->first()?->nombre;
+            $areaTrabajo = $lugarTrabajo ?? ($user->estudioCarrera?->facultad?->nombre ?? ($user->estudioCarrera?->carrera?->nombre ?? 'Universidad Estatal de Bolívar'));
 
             $results[] = [
                 'id_usuario' => $user->id,
+                'id' => $user->id,
                 'cedula' => $identificacion->numero_cedula,
-                'nombre_completo' => trim(
-                    ($identificacion->primer_nombre ?? '') . ' ' .
-                    ($identificacion->segundo_nombre ?? '') . ' ' .
-                    ($identificacion->apellido_paterno ?? '') . ' ' .
-                    ($identificacion->apellido_materno ?? '')
-                ),
+                'numero_cedula' => $identificacion->numero_cedula,
+                'nombre_completo' => $nombreCompleto,
+                'nombres' => $nombres,
+                'apellidos' => $apellidos,
                 'primer_nombre' => $identificacion->primer_nombre,
                 'segundo_nombre' => $identificacion->segundo_nombre,
                 'apellido_paterno' => $identificacion->apellido_paterno,
                 'apellido_materno' => $identificacion->apellido_materno,
+                'email' => $user->email,
+                'tipo_usuario' => $tipoUsuario,
+                'id_tipo_usuario' => $idTipoUsuario,
+                'puestoTrabajo' => $puestoTrabajo,
+                'areaTrabajo' => $areaTrabajo,
+                'edad' => $edad,
             ];
-        }
-
-        if (empty($results)) {
-            return response()->json([
-                'message' => 'Paciente no encontrado',
-            ], 404);
         }
 
         return response()->json([
             'data' => $results,
-            'message' => 'Pacientes encontrados',
-        ]);
+            'message' => empty($results) ? 'No se encontraron pacientes para este criterio o ámbito médico.' : 'Pacientes encontrados',
+        ], 200);
     }
 
     /**
