@@ -52,7 +52,7 @@ class ResetPasswordNotification extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         // Build the reset URL with token and email
-        $resetUrl = config('app.url') . '/reset-password?token=' . $this->token . '&email=' . urlencode($notifiable->email);
+        $resetUrl = config('app.frontend_url') . '/reset-password?token=' . $this->token . '&email=' . urlencode($notifiable->email);
         
         return (new MailMessage)
             ->subject('Restablecer contraseña - Bienestar Universitario')

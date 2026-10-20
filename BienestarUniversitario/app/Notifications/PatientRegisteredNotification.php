@@ -41,7 +41,7 @@ class PatientRegisteredNotification extends Notification implements ShouldQueue
      */
     public function toMail(object $notifiable): MailMessage
     {
-        $loginUrl = config('app.url') . '/login';
+        $loginUrl = config('app.frontend_url') . '/login';
 
         return (new MailMessage)
             ->subject('Acceso a Bienestar Universitario UEB - Clave Temporal')
