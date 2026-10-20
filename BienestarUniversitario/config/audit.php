@@ -46,18 +46,4 @@ return [
         'show',
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Audit User Resolver
-    |--------------------------------------------------------------------------
-    |
-    | Callable that returns the current authenticated user making the action.
-    | This allows flexibility in how user context is determined.
-    |
-    */
-
-    'user_resolver' => function () {
-        return auth()->user();
-    },
-
 ];
