@@ -14,6 +14,7 @@ class GrupoVulnerableMedicoocupacional extends Model
         'id_usuario_paciente',
         'id_lista_vulnerabilidad',
         'detalle_otra_enfermedad',
+        'edad',
     ];
 
     public function doctor(): BelongsTo

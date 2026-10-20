@@ -18,6 +18,8 @@ class AusentismoLaboralMedicoocupacional extends Model
         'horas_perdidas',
         'horas_trabajadas',
         'indice_ausentismo',
+        'cargo',
+        'fecha',
     ];
 
     public function doctor(): BelongsTo

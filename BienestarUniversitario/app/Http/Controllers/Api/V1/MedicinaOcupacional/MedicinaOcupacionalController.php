@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1\MedicinaOcupacional;
 
 use App\Http\Controllers\Controller;
+use App\Models\ExamenPeriodicoMedicoocupacional;
+use App\Models\SospechososConfirmadosInfluenza;
 use App\Models\AccidentesLaboralesMedicoocupacional;
 use App\Models\AusentismoLaboralMedicoocupacional;
 use App\Models\CeseDeFuncionesMedicoocupacional;
@@ -1073,7 +1075,7 @@ class MedicinaOcupacionalController extends Controller
 
     public function indexReintegroUeb(Request $request): JsonResponse
     {
-        $query = ReintegroUebMedicoocupacional::query()->with(['doctor', 'paciente']);
+        $query = ReintegroUebMedicoocupacional::query()->with(['doctor', 'paciente.datosIdentificacion']);
         if ($request->has('id_usuario_paciente')) {
             $query->where('id_usuario_paciente', $request->id_usuario_paciente);
         }
@@ -1135,7 +1137,7 @@ class MedicinaOcupacionalController extends Controller
 
     public function indexPersonalNuevo(Request $request): JsonResponse
     {
-        $query = PersonalNuevoMedicoocupacional::query()->with(['doctor', 'paciente']);
+        $query = PersonalNuevoMedicoocupacional::query()->with(['doctor', 'paciente.datosIdentificacion']);
         if ($request->has('id_usuario_paciente')) {
             $query->where('id_usuario_paciente', $request->id_usuario_paciente);
         }
@@ -1155,12 +1157,14 @@ class MedicinaOcupacionalController extends Controller
         $request->validate([
             'id_usuario_paciente' => 'required|integer|exists:users,id',
             'fecha_ingreso' => 'required|date',
+            'cargo' => 'nullable|string|max:255',
         ]);
         $user = Auth::user();
         $data = PersonalNuevoMedicoocupacional::create([
             'id_usuario_doctor' => $user->id,
             'id_usuario_paciente' => $request->id_usuario_paciente,
             'fecha_ingreso' => $request->fecha_ingreso,
+            'cargo' => $request->cargo,
         ]);
         return response()->json(['data' => $data->load(['doctor', 'paciente']), 'message' => 'Created'], 201);
     }
@@ -1191,7 +1195,7 @@ class MedicinaOcupacionalController extends Controller
 
     public function indexCeseFunciones(Request $request): JsonResponse
     {
-        $query = CeseDeFuncionesMedicoocupacional::query()->with(['doctor', 'paciente']);
+        $query = CeseDeFuncionesMedicoocupacional::query()->with(['doctor', 'paciente.datosIdentificacion']);
         if ($request->has('id_usuario_paciente')) {
             $query->where('id_usuario_paciente', $request->id_usuario_paciente);
         }
@@ -1296,7 +1300,7 @@ class MedicinaOcupacionalController extends Controller
 
     public function indexGrupoVulnerable(Request $request): JsonResponse
     {
-        $query = GrupoVulnerableMedicoocupacional::query()->with(['doctor', 'paciente', 'vulnerabilidad']);
+        $query = GrupoVulnerableMedicoocupacional::query()->with(['doctor', 'paciente.datosIdentificacion', 'vulnerabilidad']);
         if ($request->has('id_usuario_paciente')) {
             $query->where('id_usuario_paciente', $request->id_usuario_paciente);
         }
@@ -1315,8 +1319,9 @@ class MedicinaOcupacionalController extends Controller
     {
         $request->validate([
             'id_usuario_paciente' => 'required|integer|exists:users,id',
-            'id_lista_vulnerabilidad' => 'required|integer|exists:lista_vulnerabilidades_medicoocupacional,id',
+            'id_lista_vulnerabilidad' => 'required|integer|exists:lista_vulnerabilidades_medico,id',
             'detalle_otra_enfermedad' => 'nullable|string|max:255',
+            'edad' => 'nullable|integer|min:0|max:120',
         ]);
         $user = Auth::user();
         $data = GrupoVulnerableMedicoocupacional::create([
@@ -1324,6 +1329,7 @@ class MedicinaOcupacionalController extends Controller
             'id_usuario_paciente' => $request->id_usuario_paciente,
             'id_lista_vulnerabilidad' => $request->id_lista_vulnerabilidad,
             'detalle_otra_enfermedad' => $request->detalle_otra_enfermedad,
+            'edad' => $request->edad,
         ]);
         return response()->json(['data' => $data->load(['doctor', 'paciente', 'vulnerabilidad']), 'message' => 'Created'], 201);
     }
@@ -1334,7 +1340,7 @@ class MedicinaOcupacionalController extends Controller
         if (!$data) return response()->json(['message' => 'Not found'], 404);
         $request->validate([
             'id_usuario_paciente' => 'sometimes|integer|exists:users,id',
-            'id_lista_vulnerabilidad' => 'sometimes|integer|exists:lista_vulnerabilidades_medicoocupacional,id',
+            'id_lista_vulnerabilidad' => 'sometimes|integer|exists:lista_vulnerabilidades_medico,id',
             'detalle_otra_enfermedad' => 'sometimes|string|max:255',
         ]);
         $data->update($request->only(['id_usuario_paciente', 'id_lista_vulnerabilidad', 'detalle_otra_enfermedad']));
@@ -1355,7 +1361,7 @@ class MedicinaOcupacionalController extends Controller
 
     public function indexGrupoRiesgoPsicosocial(Request $request): JsonResponse
     {
-        $query = GrupoRiesgoPsicosocialMedicoocupacional::query()->with(['doctor', 'paciente']);
+        $query = GrupoRiesgoPsicosocialMedicoocupacional::query()->with(['doctor', 'paciente.datosIdentificacion']);
         if ($request->has('id_usuario_paciente')) {
             $query->where('id_usuario_paciente', $request->id_usuario_paciente);
         }
@@ -1375,12 +1381,14 @@ class MedicinaOcupacionalController extends Controller
         $request->validate([
             'id_usuario_paciente' => 'required|integer|exists:users,id',
             'detalle_diagnostico' => 'required|string|max:255',
+            'tipo_servidor' => 'nullable|string|max:255',
         ]);
         $user = Auth::user();
         $data = GrupoRiesgoPsicosocialMedicoocupacional::create([
             'id_usuario_doctor' => $user->id,
             'id_usuario_paciente' => $request->id_usuario_paciente,
             'detalle_diagnostico' => $request->detalle_diagnostico,
+            'tipo_servidor' => $request->tipo_servidor,
         ]);
         return response()->json(['data' => $data->load(['doctor', 'paciente']), 'message' => 'Created'], 201);
     }
@@ -1457,7 +1465,7 @@ class MedicinaOcupacionalController extends Controller
 
     public function indexFuncionariosDiscapacidad(Request $request): JsonResponse
     {
-        $query = GrupoFuncionariosDiscapacidadMedicoocupacional::query()->with(['doctor', 'paciente', 'tipoDiscapacidad']);
+        $query = GrupoFuncionariosDiscapacidadMedicoocupacional::query()->with(['doctor', 'paciente.datosIdentificacion', 'tipoDiscapacidad']);
         if ($request->has('id_usuario_paciente')) {
             $query->where('id_usuario_paciente', $request->id_usuario_paciente);
         }
@@ -1476,8 +1484,11 @@ class MedicinaOcupacionalController extends Controller
     {
         $request->validate([
             'id_usuario_paciente' => 'required|integer|exists:users,id',
-            'id_tipo_discapacidad' => 'required|integer|exists:listado_tipos_discapacidades_medicoocupacional,id',
+            'id_tipo_discapacidad' => 'required|integer|exists:listado_discapacidades_medico,id',
             'porcentaje_discapacidad' => 'required|numeric|min:0|max:100',
+            'cargo' => 'nullable|string|max:255',
+            'dependencia' => 'nullable|string|max:255',
+            'condicion_laboral' => 'nullable|string|max:255',
         ]);
         $user = Auth::user();
         $data = GrupoFuncionariosDiscapacidadMedicoocupacional::create([
@@ -1485,6 +1496,9 @@ class MedicinaOcupacionalController extends Controller
             'id_usuario_paciente' => $request->id_usuario_paciente,
             'id_tipo_discapacidad' => $request->id_tipo_discapacidad,
             'porcentaje_discapacidad' => $request->porcentaje_discapacidad,
+            'cargo' => $request->cargo,
+            'dependencia' => $request->dependencia,
+            'condicion_laboral' => $request->condicion_laboral,
         ]);
         return response()->json(['data' => $data->load(['doctor', 'paciente', 'tipoDiscapacidad']), 'message' => 'Created'], 201);
     }
@@ -1495,7 +1509,7 @@ class MedicinaOcupacionalController extends Controller
         if (!$data) return response()->json(['message' => 'Not found'], 404);
         $request->validate([
             'id_usuario_paciente' => 'sometimes|integer|exists:users,id',
-            'id_tipo_discapacidad' => 'sometimes|integer|exists:listado_tipos_discapacidades_medicoocupacional,id',
+            'id_tipo_discapacidad' => 'sometimes|integer|exists:listado_discapacidades_medico,id',
             'porcentaje_discapacidad' => 'sometimes|numeric|min:0|max:100',
         ]);
         $data->update($request->only(['id_usuario_paciente', 'id_tipo_discapacidad', 'porcentaje_discapacidad']));
@@ -1516,7 +1530,7 @@ class MedicinaOcupacionalController extends Controller
 
     public function indexEnfermedadesNuevas(Request $request): JsonResponse
     {
-        $query = EnfermedadesNuevasMedicoocupacional::query()->with(['doctor', 'paciente']);
+        $query = EnfermedadesNuevasMedicoocupacional::query()->with(['doctor', 'paciente.datosIdentificacion']);
         if ($request->has('id_usuario_paciente')) {
             $query->where('id_usuario_paciente', $request->id_usuario_paciente);
         }
@@ -1575,7 +1589,7 @@ class MedicinaOcupacionalController extends Controller
 
     public function indexEnfermedadesCatastroficas(Request $request): JsonResponse
     {
-        $query = EnfermedadesCatastroficasMedicoocupacional::query()->with(['doctor', 'paciente']);
+        $query = EnfermedadesCatastroficasMedicoocupacional::query()->with(['doctor', 'paciente.datosIdentificacion']);
         if ($request->has('id_usuario_paciente')) {
             $query->where('id_usuario_paciente', $request->id_usuario_paciente);
         }
@@ -1596,6 +1610,10 @@ class MedicinaOcupacionalController extends Controller
             'id_usuario_paciente' => 'required|integer|exists:users,id',
             'detalle_enfermedad' => 'required|string|max:255',
             'detalle_novedades' => 'nullable|string|max:255',
+            'clasificacion' => 'nullable|string|max:50',
+            'fecha_diagnostico' => 'nullable|date',
+            'cargo' => 'nullable|string|max:255',
+            'recibio_tratamiento' => 'nullable|in:SI,NO',
         ]);
         $user = Auth::user();
         $data = EnfermedadesCatastroficasMedicoocupacional::create([
@@ -1603,6 +1621,10 @@ class MedicinaOcupacionalController extends Controller
             'id_usuario_paciente' => $request->id_usuario_paciente,
             'detalle_enfermedad' => $request->detalle_enfermedad,
             'detalle_novedades' => $request->detalle_novedades,
+            'clasificacion' => $request->clasificacion,
+            'fecha_diagnostico' => $request->fecha_diagnostico,
+            'cargo' => $request->cargo,
+            'recibio_tratamiento' => $request->recibio_tratamiento,
         ]);
         return response()->json(['data' => $data->load(['doctor', 'paciente']), 'message' => 'Created'], 201);
     }
@@ -1634,7 +1656,7 @@ class MedicinaOcupacionalController extends Controller
 
     public function indexListadoEmbarazadas(Request $request): JsonResponse
     {
-        $query = ListadoEmbarazadasMedicoocupacional::query()->with(['doctor', 'paciente']);
+        $query = ListadoEmbarazadasMedicoocupacional::query()->with(['doctor', 'paciente.datosIdentificacion']);
         if ($request->has('id_usuario_paciente')) {
             $query->where('id_usuario_paciente', $request->id_usuario_paciente);
         }
@@ -1657,6 +1679,8 @@ class MedicinaOcupacionalController extends Controller
             'fecha_fum' => 'required|date',
             'fecha_probable_parto' => 'required|date|after:fecha_fum',
             'numero_controles' => 'required|integer|min:0',
+            'edad' => 'nullable|integer|min:10|max:70',
+            'telefono' => 'nullable|string|max:30',
         ]);
         $user = Auth::user();
         $data = ListadoEmbarazadasMedicoocupacional::create([
@@ -1666,6 +1690,8 @@ class MedicinaOcupacionalController extends Controller
             'fecha_fum' => $request->fecha_fum,
             'fecha_probable_parto' => $request->fecha_probable_parto,
             'numero_controles' => $request->numero_controles,
+            'edad' => $request->edad,
+            'telefono' => $request->telefono,
         ]);
         return response()->json(['data' => $data->load(['doctor', 'paciente']), 'message' => 'Created'], 201);
     }
@@ -1699,7 +1725,7 @@ class MedicinaOcupacionalController extends Controller
 
     public function indexInfluenza(Request $request): JsonResponse
     {
-        $query = SospechososConfirmadosInfluenza::query()->with(['doctor', 'paciente']);
+        $query = SospechososConfirmadosInfluenza::query()->with(['doctor', 'paciente.datosIdentificacion']);
         if ($request->has('id_usuario_paciente')) {
             $query->where('id_usuario_paciente', $request->id_usuario_paciente);
         }
@@ -1726,6 +1752,13 @@ class MedicinaOcupacionalController extends Controller
             'detalle_anticuerpos' => 'nullable|string|max:255',
             'detalle_altamedica' => 'nullable|string|max:255',
             'dias_aislamiento' => 'required|integer|min:1',
+            'tipo_trabajador' => 'nullable|string|max:255',
+            'lugar_trabajo' => 'nullable|string|max:255',
+            'fecha_resultados' => 'nullable|date',
+            'pcr' => 'boolean',
+            'prueba_rapida' => 'boolean',
+            'alta_medica' => 'boolean',
+            'descartado' => 'boolean',
         ]);
         $user = Auth::user();
         $data = SospechososConfirmadosInfluenza::create([
@@ -1736,6 +1769,13 @@ class MedicinaOcupacionalController extends Controller
             'detalle_anticuerpos' => $request->detalle_anticuerpos,
             'detalle_altamedica' => $request->detalle_altamedica,
             'dias_aislamiento' => $request->dias_aislamiento,
+            'tipo_trabajador' => $request->tipo_trabajador,
+            'lugar_trabajo' => $request->lugar_trabajo,
+            'fecha_resultados' => $request->fecha_resultados,
+            'pcr' => $request->boolean('pcr'),
+            'prueba_rapida' => $request->boolean('prueba_rapida'),
+            'alta_medica' => $request->boolean('alta_medica'),
+            'descartado' => $request->boolean('descartado'),
         ]);
         return response()->json(['data' => $data->load(['doctor', 'paciente']), 'message' => 'Created'], 201);
     }
@@ -1770,7 +1810,7 @@ class MedicinaOcupacionalController extends Controller
 
     public function indexAusentismoLaboral(Request $request): JsonResponse
     {
-        $query = AusentismoLaboralMedicoocupacional::query()->with(['doctor', 'paciente']);
+        $query = AusentismoLaboralMedicoocupacional::query()->with(['doctor', 'paciente.datosIdentificacion']);
         if ($request->has('id_usuario_paciente')) {
             $query->where('id_usuario_paciente', $request->id_usuario_paciente);
         }
@@ -1798,6 +1838,8 @@ class MedicinaOcupacionalController extends Controller
             'horas_perdidas' => 'required|numeric|min:0',
             'horas_trabajadas' => 'required|numeric|min:0',
             'indice_ausentismo' => 'required|numeric|min:0',
+            'cargo' => 'nullable|string|max:255',
+            'fecha' => 'nullable|date',
         ]);
         $user = Auth::user();
         $data = AusentismoLaboralMedicoocupacional::create([
@@ -1809,6 +1851,8 @@ class MedicinaOcupacionalController extends Controller
             'horas_perdidas' => $request->horas_perdidas,
             'horas_trabajadas' => $request->horas_trabajadas,
             'indice_ausentismo' => $request->indice_ausentismo,
+            'cargo' => $request->cargo,
+            'fecha' => $request->fecha,
         ]);
         return response()->json(['data' => $data->load(['doctor', 'paciente']), 'message' => 'Created'], 201);
     }
@@ -1844,7 +1888,7 @@ class MedicinaOcupacionalController extends Controller
 
     public function indexAccidentesLaborales(Request $request): JsonResponse
     {
-        $query = AccidentesLaboralesMedicoocupacional::query()->with(['doctor', 'paciente']);
+        $query = AccidentesLaboralesMedicoocupacional::query()->with(['doctor', 'paciente.datosIdentificacion']);
         if ($request->has('id_usuario_paciente')) {
             $query->where('id_usuario_paciente', $request->id_usuario_paciente);
         }
@@ -1872,6 +1916,10 @@ class MedicinaOcupacionalController extends Controller
             'fuente_accidente' => 'required|string|max:255',
             'tipo_accidente' => 'required|string|max:255',
             'dias_perdidos' => 'required|integer|min:0',
+            'cargo' => 'nullable|string|max:255',
+            'diagnostico' => 'nullable|string|max:255',
+            'gravedad' => 'nullable|string|max:50',
+            'novedades' => 'nullable|string|max:255',
         ]);
         $user = Auth::user();
         $data = AccidentesLaboralesMedicoocupacional::create([
@@ -1886,6 +1934,10 @@ class MedicinaOcupacionalController extends Controller
             'fuente_accidente' => $request->fuente_accidente,
             'tipo_accidente' => $request->tipo_accidente,
             'dias_perdidos' => $request->dias_perdidos,
+            'cargo' => $request->cargo,
+            'diagnostico' => $request->diagnostico,
+            'gravedad' => $request->gravedad,
+            'novedades' => $request->novedades,
         ]);
         return response()->json(['data' => $data->load(['doctor', 'paciente']), 'message' => 'Created'], 201);
     }
@@ -1935,6 +1987,43 @@ class MedicinaOcupacionalController extends Controller
             'data' => $actual,
             'message' => $actual ? 'Blood type retrieved' : 'No blood type assigned',
         ]);
+    }
+
+    // ==========================================
+    // EXÁMENES PERIÓDICOS POR MES (Matriz)
+    // ==========================================
+
+    public function indexExamenesPeriodicos(Request $request): JsonResponse
+    {
+        $query = ExamenPeriodicoMedicoocupacional::query();
+        if ($request->filled('anio')) {
+            $query->where('anio', $request->anio);
+        }
+        $data = $query->orderBy('anio')->orderBy('mes')->get();
+        return response()->json(['data' => $data, 'message' => 'Examenes periodicos retrieved']);
+    }
+
+    // Un registro por mes y año: si ya existe se actualiza la cantidad
+    public function storeExamenesPeriodicos(Request $request): JsonResponse
+    {
+        $request->validate([
+            'anio' => 'required|integer|min:2000|max:2100',
+            'mes' => 'required|integer|min:1|max:12',
+            'cantidad' => 'required|integer|min:0',
+        ]);
+        $data = ExamenPeriodicoMedicoocupacional::updateOrCreate(
+            ['anio' => $request->anio, 'mes' => $request->mes],
+            ['cantidad' => $request->cantidad, 'id_usuario_doctor' => Auth::id()]
+        );
+        return response()->json(['data' => $data, 'message' => 'Saved'], 201);
+    }
+
+    public function destroyExamenesPeriodicos(int $id): JsonResponse
+    {
+        $data = ExamenPeriodicoMedicoocupacional::find($id);
+        if (!$data) return response()->json(['message' => 'Not found'], 404);
+        $data->delete();
+        return response()->json(['message' => 'Deleted']);
     }
 
     public function storePatientBloodType(Request $request, int $patientId): JsonResponse

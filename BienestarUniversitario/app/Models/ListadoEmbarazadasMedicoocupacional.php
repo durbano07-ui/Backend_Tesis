@@ -16,6 +16,8 @@ class ListadoEmbarazadasMedicoocupacional extends Model
         'fecha_fum',
         'fecha_probable_parto',
         'numero_controles',
+        'edad',
+        'telefono',
     ];
 
     public function doctor(): BelongsTo

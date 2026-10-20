@@ -17,6 +17,20 @@ class SospechososConfirmadosInfluenza extends Model
         'detalle_anticuerpos',
         'detalle_altamedica',
         'dias_aislamiento',
+        'tipo_trabajador',
+        'lugar_trabajo',
+        'fecha_resultados',
+        'pcr',
+        'prueba_rapida',
+        'alta_medica',
+        'descartado',
+    ];
+
+    protected $casts = [
+        'pcr' => 'boolean',
+        'prueba_rapida' => 'boolean',
+        'alta_medica' => 'boolean',
+        'descartado' => 'boolean',
     ];
 
     public function doctor(): BelongsTo

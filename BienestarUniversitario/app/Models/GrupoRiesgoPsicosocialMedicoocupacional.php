@@ -13,6 +13,7 @@ class GrupoRiesgoPsicosocialMedicoocupacional extends Model
         'id_usuario_doctor',
         'id_usuario_paciente',
         'detalle_diagnostico',
+        'tipo_servidor',
     ];
 
     public function doctor(): BelongsTo

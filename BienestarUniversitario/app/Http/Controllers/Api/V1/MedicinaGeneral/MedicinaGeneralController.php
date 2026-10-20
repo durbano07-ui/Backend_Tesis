@@ -196,7 +196,14 @@ class MedicinaGeneralController extends Controller
         ]);
 
         if (!empty($parte->id_usuario_paciente)) {
-            \App\Http\Controllers\Api\V1\CitasMedicasController::syncAutoCita($user->id, (int)$parte->id_usuario_paciente, 'medico_general', 'Atención en Medicina General');
+            // Este endpoint también lo usa el médico ocupacional: la cita debe quedar con su rol
+            $esOcupacional = $user->hasRole('medico_ocupacional');
+            \App\Http\Controllers\Api\V1\CitasMedicasController::syncAutoCita(
+                $user->id,
+                (int)$parte->id_usuario_paciente,
+                $esOcupacional ? 'medico_ocupacional' : 'medico_general',
+                $esOcupacional ? 'Atención en Medicina Ocupacional' : 'Atención en Medicina General'
+            );
         }
 
         return response()->json([

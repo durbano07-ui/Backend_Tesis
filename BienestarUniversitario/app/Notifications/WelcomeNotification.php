@@ -50,6 +50,7 @@ class WelcomeNotification extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject('¡Bienvenido a Bienestar Universitario UEB!')
             ->view('emails.welcome', [
+                'name' => $notifiable->name ?? $notifiable->email,
                 'email' => $notifiable->email,
                 'password' => $this->password,
                 'loginUrl' => $loginUrl,
@@ -66,7 +67,8 @@ class WelcomeNotification extends Notification implements ShouldQueue
     public function toArray(object $notifiable): array
     {
         return [
-            'email' => $notifiable->email,
+            'name' => $notifiable->name ?? $notifiable->email,
+                'email' => $notifiable->email,
         ];
     }
 

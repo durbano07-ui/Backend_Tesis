@@ -14,6 +14,10 @@ class EnfermedadesCatastroficasMedicoocupacional extends Model
         'id_usuario_paciente',
         'detalle_enfermedad',
         'detalle_novedades',
+        'clasificacion',
+        'fecha_diagnostico',
+        'cargo',
+        'recibio_tratamiento',
     ];
 
     public function doctor(): BelongsTo

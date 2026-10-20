@@ -13,6 +13,7 @@ class PersonalNuevoMedicoocupacional extends Model
         'id_usuario_doctor',
         'id_usuario_paciente',
         'fecha_ingreso',
+        'cargo',
     ];
 
     public function doctor(): BelongsTo

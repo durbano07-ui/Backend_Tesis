@@ -21,6 +21,10 @@ class AccidentesLaboralesMedicoocupacional extends Model
         'fuente_accidente',
         'tipo_accidente',
         'dias_perdidos',
+        'cargo',
+        'diagnostico',
+        'gravedad',
+        'novedades',
     ];
 
     public function doctor(): BelongsTo

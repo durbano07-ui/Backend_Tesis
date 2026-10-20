@@ -56,7 +56,7 @@ class ResetPasswordNotification extends Notification implements ShouldQueue
         
         return (new MailMessage)
             ->subject('Restablecer contraseña - Bienestar Universitario')
-            ->view('emails.password-reset', [
+            ->view('emails.reset-password', [
                 'name' => $notifiable->name ?? $notifiable->email,
                 'resetUrl' => $resetUrl,
                 'headerTitle' => 'Bienestar Universitario UEB',

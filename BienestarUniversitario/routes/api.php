@@ -491,6 +491,11 @@ Route::prefix('v1/medicina-ocupacional')->middleware(['auth:sanctum', 'force_pas
     Route::delete('/accidentes-laborales/{id}', [MedicinaOcupacionalController::class, 'destroyAccidentesLaborales']);
 
     // Blood Type (medico ocupacional)
+    // Exámenes periódicos por mes (matriz)
+    Route::get('/examenes-periodicos', [MedicinaOcupacionalController::class, 'indexExamenesPeriodicos']);
+    Route::post('/examenes-periodicos', [MedicinaOcupacionalController::class, 'storeExamenesPeriodicos']);
+    Route::delete('/examenes-periodicos/{id}', [MedicinaOcupacionalController::class, 'destroyExamenesPeriodicos']);
+
     Route::get('/patient/{id}/blood-type', [MedicinaOcupacionalController::class, 'getPatientBloodType']);
     Route::post('/patient/{id}/blood-type', [MedicinaOcupacionalController::class, 'storePatientBloodType']);
 });

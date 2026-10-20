@@ -14,6 +14,9 @@ class GrupoFuncionariosDiscapacidadMedicoocupacional extends Model
         'id_usuario_paciente',
         'id_tipo_discapacidad',
         'porcentaje_discapacidad',
+        'cargo',
+        'dependencia',
+        'condicion_laboral',
     ];
 
     public function doctor(): BelongsTo
