@@ -7,6 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AnalisisResultadosPsicologia extends Model
 {
+    use \App\Models\Concerns\EncryptsHealthData;
+
+    /** OWASP ASVS V6.1.2: datos de salud cifrados en reposo */
+    protected array $encryptedHealthFields = ['detalle_analisis_resultados'];
+
     protected $table = 'analisis_resultados_psicologia';
 
     protected $fillable = [

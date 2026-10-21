@@ -37,10 +37,12 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
     // Auth routes (public)
     Route::prefix('auth')->group(function () {
-        Route::post('/login', [AuthController::class, 'login']);
-        Route::post('/register', [AuthController::class, 'register']);
-        Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
-        Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+        // OWASP ASVS V2.2.1 / V11.1.4: límites anti-automatización por IP (además del bloqueo
+        // de cuenta tras 5 intentos fallidos de login)
+        Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:20,1');
+        Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,10');
+        Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,10');
+        Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:10,10');
     });
 
     // Protected auth routes
@@ -59,23 +61,26 @@ Route::prefix('v1')->group(function () {
         // User management (requires roles)
         Route::middleware(['force_password_change'])->group(function () {
             // Users
-            Route::get('/users', [UserController::class, 'index']);
-            Route::post('/users', [UserController::class, 'store']);
+            // OWASP ASVS V4.1.3: gestión de cuentas solo para administración/coordinación
+            Route::get('/users', [UserController::class, 'index'])->middleware('role:administrador|medico_coordinador');
+            Route::post('/users', [UserController::class, 'store'])->middleware('role:administrador|medico_coordinador');
             Route::post('/users/register-patient', [UserController::class, 'registerPatient']);
             Route::get('/users/search-by-cedula', [UserController::class, 'searchByCedula']);
             Route::get('/patients/search', [UserController::class, 'searchByCedula']);
             Route::get('/users/{user}', [UserController::class, 'show']);
-            Route::put('/users/{user}', [UserController::class, 'update']);
-            Route::put('/users/{user}/disable', [UserController::class, 'disable']);
-            Route::put('/users/{user}/enable', [UserController::class, 'enable']);
-            Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
-            Route::delete('/users/{user}/roles/{role}', [UserController::class, 'removeRole']);
+            Route::middleware('role:administrador|medico_coordinador')->group(function () {
+                Route::put('/users/{user}', [UserController::class, 'update']);
+                Route::put('/users/{user}/disable', [UserController::class, 'disable']);
+                Route::put('/users/{user}/enable', [UserController::class, 'enable']);
+                Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
+                Route::delete('/users/{user}/roles/{role}', [UserController::class, 'removeRole']);
+            });
 
             // Roles
             Route::get('/roles', [RoleController::class, 'index']);
 
             // Audit logs
-            Route::get('/audit-logs', [AuditLogController::class, 'index']);
+            Route::get('/audit-logs', [AuditLogController::class, 'index'])->middleware('role:administrador|medico_coordinador');
 
             // Dashboard (coordinator and admin)
             Route::get('/dashboard', [DashboardController::class, 'index']);
@@ -86,7 +91,7 @@ Route::prefix('v1')->group(function () {
                 ->middleware('role:administrador');
 
             // Gestión Campus, Facultades y Carreras (CRUD)
-            Route::prefix('campus-management')->group(function () {
+            Route::prefix('campus-management')->middleware('role:administrador|medico_coordinador')->group(function () {
                 // Campus
                 Route::get('/campus', [CampusManagementController::class, 'indexCampus']);
                 Route::post('/campus', [CampusManagementController::class, 'storeCampus']);

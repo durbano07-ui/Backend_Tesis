@@ -34,7 +34,6 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'clave_temporal',
         'must_change_password',
         'activo',
     ];
@@ -47,7 +46,6 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
-        'clave_temporal',
     ];
 
     /**

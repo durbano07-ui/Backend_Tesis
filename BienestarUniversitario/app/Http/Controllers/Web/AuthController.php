@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -39,7 +40,7 @@ class AuthController extends Controller
         $request->validate([
             'token' => 'required|string',
             'email' => 'required|email',
-            'password' => 'required|string|min:8|confirmed',
+            'password' => ['required', 'string', 'confirmed', PasswordRule::defaults()],
         ]);
 
         // Verify the token

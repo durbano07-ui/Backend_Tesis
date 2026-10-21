@@ -7,6 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PsicoanamnesisPsicologia extends Model
 {
+    use \App\Models\Concerns\EncryptsHealthData;
+
+    /** OWASP ASVS V6.1.2: datos de salud cifrados en reposo */
+    protected array $encryptedHealthFields = ['detalle_psicoanamnesis'];
+
     protected $table = 'psicoanamnesis_psicologia';
 
     protected $fillable = [

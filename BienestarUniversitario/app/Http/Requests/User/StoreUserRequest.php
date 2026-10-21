@@ -45,7 +45,7 @@ class StoreUserRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
             'email' => [
                 'required',
                 'string',
@@ -56,7 +56,13 @@ class StoreUserRequest extends FormRequest
             ],
             'roles' => ['required', 'array', 'min:1'],
             'roles.*' => ['string', 'exists:roles,name'],
-            'id_tipo_usuario' => ['required', 'string', 'max:50'],
+            'id_tipo_usuario' => ['required', 'integer', 'exists:tipo_usuario,id'],
+            // Datos de identificación del nuevo usuario (se guardan en SU cuenta, no en la de quien lo crea)
+            'primer_nombre' => ['nullable', 'string', 'max:100', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
+            'segundo_nombre' => ['nullable', 'string', 'max:100', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
+            'apellido_paterno' => ['nullable', 'string', 'max:100', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
+            'apellido_materno' => ['nullable', 'string', 'max:100', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
+            'numero_cedula' => ['nullable', 'string', 'regex:/^[0-9A-Za-z]{5,20}$/', Rule::unique('datos_identificacion', 'numero_cedula')],
         ];
     }
 

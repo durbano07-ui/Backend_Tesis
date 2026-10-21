@@ -32,7 +32,6 @@ class UserFactory extends Factory
             'remember_token' => Str::random(10),
             'activo' => true,
             'must_change_password' => false,
-            'clave_temporal' => null,
         ];
     }
 

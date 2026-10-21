@@ -42,7 +42,13 @@ return [
     |
     */
 
-    'expiration' => (int) env('SANCTUM_EXPIRATION_MINUTES', 30),
+    // OWASP ASVS V3.3.2 (Nivel 2): duración máxima de la sesión de 12 horas,
+    // aunque el usuario siga activo. La inactividad se controla con 'inactivity'.
+    'expiration' => (int) env('SANCTUM_EXPIRATION_MINUTES', 720),
+
+    // OWASP ASVS V3.3.2 (Nivel 2): cierre tras 30 minutos sin actividad
+    // (middleware ExpireInactiveTokens). Debe coincidir con VITE_SESSION_MINUTES del frontend.
+    'inactivity' => (int) env('TOKEN_INACTIVITY_MINUTES', 30),
 
     /*
     |--------------------------------------------------------------------------

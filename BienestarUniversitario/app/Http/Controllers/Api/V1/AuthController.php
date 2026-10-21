@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use Illuminate\Validation\Rules\Password as PasswordRule;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\PasswordChangeRequest;
@@ -250,12 +251,8 @@ class AuthController extends Controller
             'password' => [
                 'required',
                 'string',
-                'min:8',
+                PasswordRule::defaults(),
                 'confirmed',
-                'regex:/[A-Z]/',
-                'regex:/[a-z]/',
-                'regex:/[0-9]/',
-                'regex:/[@$!%*#?&]/',
             ],
         ]);
 
@@ -304,8 +301,14 @@ class AuthController extends Controller
 
         $user->password = Hash::make($request->password);
         $user->must_change_password = false;
-        $user->clave_temporal = null;
         $user->save();
+
+        // OWASP ASVS V3.3.3: al cambiar la contraseña se cierran las demás sesiones abiertas
+        $currentTokenId = $user->currentAccessToken()?->id;
+        $user->tokens()->when($currentTokenId, fn ($q) => $q->where('id', '!=', $currentTokenId))->delete();
+
+        // OWASP ASVS V7.1.3: registrar eventos de seguridad
+        $this->recordAuditLog($user, 'password_changed', $user, null, ['other_sessions_revoked' => true], $request);
 
         return response()->json([
             'message' => 'Password updated',

@@ -9,11 +9,26 @@ return new class extends Migration
 {
     public function up(): void
     {
-        DB::statement("ALTER TABLE parte_diario_odontologia MODIFY procedimiento VARCHAR(255) NULL DEFAULT 'Profilaxis'");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE parte_diario_odontologia MODIFY procedimiento VARCHAR(255) NULL DEFAULT 'Profilaxis'");
+            return;
+        }
+
+        // Otros motores (SQLite en las pruebas automáticas)
+        Schema::table('parte_diario_odontologia', function (Blueprint $table) {
+            $table->string('procedimiento', 255)->nullable()->default('Profilaxis')->change();
+        });
     }
 
     public function down(): void
     {
-        DB::statement("ALTER TABLE parte_diario_odontologia MODIFY procedimiento VARCHAR(255) NOT NULL");
+        if (DB::getDriverName() === 'mysql') {
+            DB::statement("ALTER TABLE parte_diario_odontologia MODIFY procedimiento VARCHAR(255) NOT NULL");
+            return;
+        }
+
+        Schema::table('parte_diario_odontologia', function (Blueprint $table) {
+            $table->string('procedimiento', 255)->nullable(false)->change();
+        });
     }
 };

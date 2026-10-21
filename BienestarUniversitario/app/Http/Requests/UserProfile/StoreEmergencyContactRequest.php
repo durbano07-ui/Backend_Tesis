@@ -14,7 +14,7 @@ class StoreEmergencyContactRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'nombre_completo' => ['required', 'string', 'max:255'],
+            'nombre_completo' => ['required', 'string', 'max:255', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
             'parentesco' => ['required', 'string', 'max:100'],
             'telefono' => ['required', 'string', 'max:20'],
             'celular' => ['nullable', 'string', 'max:20'],

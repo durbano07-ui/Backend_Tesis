@@ -7,6 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class UsuarioTieneAlergia extends Model
 {
+    use \App\Models\Concerns\EncryptsHealthData;
+
+    /** OWASP ASVS V6.1.2: datos de salud cifrados en reposo */
+    protected array $encryptedHealthFields = ['detalle_alergia'];
+
     protected $table = 'usuario_tiene_alergias';
     public $timestamps = false;
 

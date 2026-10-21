@@ -6,11 +6,18 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Database\Seeders\RoleSeeder;
 use Tests\TestCase;
 
 class ForcePasswordChangeTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(RoleSeeder::class);
+    }
 
     public function test_temp_password_user_can_login(): void
     {
@@ -19,7 +26,6 @@ class ForcePasswordChangeTest extends TestCase
             'password' => Hash::make('temp-password'),
             'activo' => true,
             'must_change_password' => true,
-            'clave_temporal' => 'temp-password',
         ]);
 
         $response = $this->postJson('/api/v1/auth/login', [
@@ -40,8 +46,8 @@ class ForcePasswordChangeTest extends TestCase
             'password' => Hash::make('temp-password'),
             'activo' => true,
             'must_change_password' => true,
-            'clave_temporal' => 'temp-password',
         ]);
+        $user->assignRole('administrador');
 
         $token = $user->createToken('test-token')->plainTextToken;
 
@@ -60,7 +66,6 @@ class ForcePasswordChangeTest extends TestCase
             'password' => Hash::make('temp-password'),
             'activo' => true,
             'must_change_password' => true,
-            'clave_temporal' => 'temp-password',
         ]);
 
         $token = $user->createToken('test-token')->plainTextToken;
@@ -79,7 +84,6 @@ class ForcePasswordChangeTest extends TestCase
         // Verify flags are cleared
         $user->refresh();
         $this->assertFalse($user->must_change_password);
-        $this->assertNull($user->clave_temporal);
     }
 
     public function test_after_password_change_api_access_is_granted(): void
@@ -89,8 +93,8 @@ class ForcePasswordChangeTest extends TestCase
             'password' => Hash::make('temp-password'),
             'activo' => true,
             'must_change_password' => true,
-            'clave_temporal' => 'temp-password',
         ]);
+        $user->assignRole('administrador');
 
         $token = $user->createToken('test-token')->plainTextToken;
 
@@ -119,7 +123,6 @@ class ForcePasswordChangeTest extends TestCase
             'password' => Hash::make('temp-password'),
             'activo' => true,
             'must_change_password' => true,
-            'clave_temporal' => 'temp-password',
         ]);
 
         $token = $user->createToken('test-token')->plainTextToken;
@@ -142,8 +145,8 @@ class ForcePasswordChangeTest extends TestCase
             'password' => Hash::make('regular-password'),
             'activo' => true,
             'must_change_password' => false,
-            'clave_temporal' => null,
         ]);
+        $user->assignRole('administrador');
 
         $token = $user->createToken('test-token')->plainTextToken;
 

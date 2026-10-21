@@ -7,6 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class HistorialEvolucionOdontologia extends Model
 {
+    use \App\Models\Concerns\EncryptsHealthData;
+
+    /** OWASP ASVS V6.1.2: datos de salud cifrados en reposo */
+    protected array $encryptedHealthFields = ['detalle_tratamiento', 'detalle_procedimiento'];
+
     protected $table = 'historial_evolucion_odontologia';
 
     protected $fillable = [

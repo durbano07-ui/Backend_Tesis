@@ -7,6 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EnfermedadesNuevasMedicoocupacional extends Model
 {
+    use \App\Models\Concerns\EncryptsHealthData;
+
+    /** OWASP ASVS V6.1.2: datos de salud cifrados en reposo */
+    protected array $encryptedHealthFields = ['detalle_enfermedad_nueva'];
+
     protected $table = 'enfermedades_nuevas_medico';
 
     protected $fillable = [

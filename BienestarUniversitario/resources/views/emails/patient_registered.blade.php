@@ -142,7 +142,7 @@
         </div>
         <div class="card">
             <h2>¡Hola, {{ $patientName }}!</h2>
-            <p>El personal médico de Bienestar Universitario ha registrado tu cuenta institucional de salud.</p>
+            <p>Se ha creado o restablecido el acceso a tu cuenta institucional de Bienestar Universitario.</p>
             
             <p>Se ha generado una <strong>contraseña temporal</strong> de acceso para tu cuenta:</p>
 

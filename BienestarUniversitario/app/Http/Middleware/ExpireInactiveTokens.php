@@ -12,18 +12,20 @@ class ExpireInactiveTokens
 {
     /**
      * Handle an incoming request.
-     * Invalidates the token if there's been no activity for the configured time.
+     * Invalidates the token if there's been no activity for the configured time
+     * (OWASP ASVS V3.3.2).
      */
     public function handle(Request $request, Closure $next): Response
     {
-        $user = Auth::user();
+        // Este middleware corre en el grupo "api", antes que auth:sanctum: hay que pedir
+        // explícitamente el guard de Sanctum (el guard por defecto "web" devuelve null aquí).
+        $user = Auth::guard('sanctum')->user();
+        $token = $user?->currentAccessToken();
 
-        if ($user && $request->user()?->currentAccessToken()) {
-            $token = $request->user()->currentAccessToken();
-
-            // Check if token has last_activity_at and if it's expired
+        // Solo tokens persistentes (no TransientToken de sesiones de navegador)
+        if ($token && method_exists($token, 'update')) {
             if ($token->last_activity_at) {
-                $inactiveMinutes = (int) env('TOKEN_INACTIVITY_MINUTES', 60);
+                $inactiveMinutes = (int) config('sanctum.inactivity', 30);
                 $lastActivity = Carbon::parse($token->last_activity_at);
 
                 if ($lastActivity->diffInMinutes(now()) >= $inactiveMinutes) {
@@ -37,7 +39,7 @@ class ExpireInactiveTokens
             }
 
             // Update last activity time
-            $token->update(['last_activity_at' => now()]);
+            $token->forceFill(['last_activity_at' => now()])->save();
         }
 
         return $next($request);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\User;
 
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Foundation\Http\FormRequest;
 
 class UpdateUserRequest extends FormRequest
@@ -44,10 +45,10 @@ class UpdateUserRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['sometimes', 'string', 'max:255'],
+            'name' => ['sometimes', 'string', 'max:255', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
             'email' => ['sometimes', 'email', 'max:255'],
             'id_tipo_usuario' => ['sometimes', 'nullable'],
-            'password' => ['sometimes', 'nullable', 'string', 'min:6'],
+            'password' => ['sometimes', 'nullable', 'string', Password::defaults()],
             'roles' => ['sometimes', 'array'],
             'roles.*' => ['string', 'exists:roles,name'],
         ];

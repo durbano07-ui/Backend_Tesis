@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Foundation\Http\FormRequest;
 
 class PasswordChangeRequest extends FormRequest
@@ -26,13 +27,9 @@ class PasswordChangeRequest extends FormRequest
             'password' => [
                 'required',
                 'string',
-                'min:8',
+                Password::defaults(),
                 'confirmed',
                 'different:current_password',
-                'regex:/[A-Z]/',
-                'regex:/[a-z]/',
-                'regex:/[0-9]/',
-                'regex:/[@$!%*#?&]/',
             ],
         ];
     }

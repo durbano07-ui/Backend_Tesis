@@ -5,6 +5,9 @@ use App\Http\Middleware\ExpireInactiveTokens;
 use App\Http\Middleware\ForcePasswordChange;
 use App\Http\Middleware\LogAudit;
 use App\Http\Middleware\RateLimitByIP;
+use App\Http\Middleware\RestrictPatientAccess;
+use App\Http\Middleware\ApiSecurityHeaders;
+use App\Http\Middleware\RestrictStaffModuleAccess;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -33,6 +36,15 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Http\Middleware\HandleCors::class,
             RateLimitByIP::class,
             ExpireInactiveTokens::class,
+        ]);
+
+        $middleware->api(append: [
+            // Cabeceras de seguridad (va primero para cubrir también las respuestas 403)
+            ApiSecurityHeaders::class,
+            // OWASP ASVS V4.1.5 / V4.2.1: los pacientes solo acceden a sus propios datos
+            RestrictPatientAccess::class,
+            // OWASP ASVS V4.1.3: cada profesional solo accede a su módulo y al resumen de los demás
+            RestrictStaffModuleAccess::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -7,6 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ExamenEstadoMentalPsicologia extends Model
 {
+    use \App\Models\Concerns\EncryptsHealthData;
+
+    /** OWASP ASVS V6.1.2: datos de salud cifrados en reposo */
+    protected array $encryptedHealthFields = ['apariencia', 'actitud', 'juicio', 'sueno', 'apetito', 'afectividad', 'orientacion', 'atencion', 'memoria', 'lenguaje', 'pensamiento', 'conducta_motora'];
+
     protected $table = 'examen_estado_mental_psicologia';
 
     protected $fillable = [

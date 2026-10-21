@@ -7,6 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ParteDiarioEnfermeria extends Model
 {
+    use \App\Models\Concerns\EncryptsHealthData;
+
+    /** OWASP ASVS V6.1.2: datos de salud cifrados en reposo */
+    protected array $encryptedHealthFields = ['detalle_procedimiento', 'detalle_medicacion'];
+
     protected $table = 'parte_diario_enfermeria';
 
     protected $fillable = [

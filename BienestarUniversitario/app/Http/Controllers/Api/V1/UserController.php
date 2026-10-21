@@ -84,7 +84,8 @@ class UserController extends Controller
 
         // administrador can assign any role
         // medico_coordinador can only assign medical staff roles (NOT administrador or medico_coordinador)
-        if ($request->user()->hasRole('medico_coordinador')) {
+        // (si además es administrador, prevalecen los permisos de administrador)
+        if ($request->user()->hasRole('medico_coordinador') && !$request->user()->hasRole('administrador')) {
             $allowedRoles = ['enfermero', 'medico_general', 'psicologo', 'odontologo', 'medico_ocupacional', 'paciente'];
             $forbiddenRoles = array_diff($request->roles, $allowedRoles);
             if (count($forbiddenRoles) > 0) {
@@ -108,7 +109,6 @@ class UserController extends Controller
             'name' => $request->name,
             'email' => $request->email,
             'password' => $tempPassword, // Will be hashed by model
-            'clave_temporal' => $tempPassword,
             'activo' => true,
             'must_change_password' => true,
         ]);
@@ -118,6 +118,17 @@ class UserController extends Controller
                 ['id_usuario' => $user->id],
                 ['id_tipo_usuario' => $request->id_tipo_usuario]
             );
+        }
+
+        if ($request->filled(['primer_nombre', 'apellido_paterno'])) {
+            DatosIdentificacion::create([
+                'id_usuario' => $user->id,
+                'primer_nombre' => $request->primer_nombre,
+                'segundo_nombre' => $request->segundo_nombre,
+                'apellido_paterno' => $request->apellido_paterno,
+                'apellido_materno' => $request->apellido_materno,
+                'numero_cedula' => $request->numero_cedula,
+            ]);
         }
 
         // Assign roles
@@ -137,7 +148,8 @@ class UserController extends Controller
             $request
         );
 
-        // In production, send email with credentials here
+        // OWASP ASVS V2.3.1: la contraseña inicial solo se comunica al propio usuario, por correo
+        $this->sendTemporaryPassword($user, $tempPassword);
 
         return response()->json([
             'user' => new UserResource($user->load('roles')),
@@ -323,23 +335,29 @@ class UserController extends Controller
         }
         if ($request->filled('password')) {
             $user->password = $request->password;
-            $user->clave_temporal = $request->password;
             $user->must_change_password = true;
         }
         $user->save();
 
         if ($request->has('roles')) {
+            // Solo se validan los roles que cambian: un usuario multirol puede conservar
+            // roles que quien edita no podría asignar (p. ej. un coordinador editando a otro coordinador)
+            $changedRoles = array_merge(
+                array_diff($request->roles, $oldRoles),
+                array_diff($oldRoles, $request->roles)
+            );
+
             // Validate - administrador role can only be assigned by administrador
-            if (in_array('administrador', $request->roles) && !$request->user()->hasRole('administrador')) {
+            if (in_array('administrador', $changedRoles) && !$request->user()->hasRole('administrador')) {
                 return response()->json([
                     'message' => 'Solo un administrador puede asignar roles de administrador',
                 ], 422);
             }
 
             // medico_coordinador can only assign medical staff roles
-            if ($request->user()->hasRole('medico_coordinador')) {
+            if ($request->user()->hasRole('medico_coordinador') && !$request->user()->hasRole('administrador')) {
                 $allowedRoles = ['enfermero', 'medico_general', 'psicologo', 'odontologo', 'medico_ocupacional', 'paciente'];
-                $forbiddenRoles = array_diff($request->roles, $allowedRoles);
+                $forbiddenRoles = array_diff($changedRoles, $allowedRoles);
                 if (count($forbiddenRoles) > 0) {
                     return response()->json([
                         'message' => 'El coordinador médico no puede asignar roles de administrador o coordinador',
@@ -500,7 +518,6 @@ class UserController extends Controller
         $tempPassword = $this->generateSecurePassword();
 
         $user->password = $tempPassword;
-        $user->clave_temporal = $tempPassword;
         $user->must_change_password = true;
         $user->save();
 
@@ -519,9 +536,11 @@ class UserController extends Controller
             $request
         );
 
+        // La contraseña temporal se envía al usuario; no se devuelve a quien la restablece
+        $this->sendTemporaryPassword($user, $tempPassword);
+
         return response()->json([
-            'message' => 'Password reset successfully',
-            'temporary_password' => $tempPassword,
+            'message' => 'Password reset successfully. A temporary password was emailed to the user.',
         ]);
     }
 
@@ -548,7 +567,7 @@ class UserController extends Controller
         $request->validate([
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
             'cedula' => ['required', 'string', 'max:20', 'unique:datos_identificacion,numero_cedula'],
-            'nombre_completo' => ['required', 'string', 'max:255'],
+            'nombre_completo' => ['required', 'string', 'max:255', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
             'id_tipo_usuario' => ['nullable'],
             'tipo' => ['nullable', 'string'],
             'role' => ['nullable', 'string'],
@@ -606,7 +625,6 @@ class UserController extends Controller
             'name' => $fullName,
             'email' => strtolower(trim($request->email)),
             'password' => $tempPassword, // Hashed by model cast
-            'clave_temporal' => $tempPassword,
             'activo' => true,
             'must_change_password' => true,
         ]);
@@ -651,11 +669,7 @@ class UserController extends Controller
         );
 
         // Send email notification with temporary password
-        try {
-            $user->notify(new \App\Notifications\PatientRegisteredNotification($tempPassword, $fullName));
-        } catch (\Throwable $e) {
-            \Log::error('Error al enviar correo de bienvenida al paciente: ' . $e->getMessage());
-        }
+        $this->sendTemporaryPassword($user, $tempPassword, $fullName);
 
         $this->recordAuditLog(
             $currentUser,
@@ -705,34 +719,23 @@ class UserController extends Controller
     }
 
     /**
-     * Generate a secure password that always meets requirements:
-     * - At least 1 uppercase letter
-     * - At least 1 lowercase letter
-     * - At least 1 number
-     * - At least 1 special character (@$!%*#?&)
-     * - Minimum 8 characters
+     * Envía la contraseña temporal al correo del usuario (no se registra en logs ni en la BD).
+     */
+    private function sendTemporaryPassword(User $user, string $tempPassword, ?string $name = null): void
+    {
+        try {
+            $user->notify(new \App\Notifications\PatientRegisteredNotification($tempPassword, $name ?? $user->name));
+        } catch (\Throwable $e) {
+            \Log::error('Error al enviar la contraseña temporal al usuario ' . $user->id . ': ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Contraseña temporal de 16 caracteres generada con un CSPRNG
+     * (OWASP ASVS V2.3.1 y V6.3.1). Str::password usa random_int().
      */
     private function generateSecurePassword(): string
     {
-        $upper = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'];
-        $lower = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'];
-        $numbers = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'];
-        $specials = ['@', '$', '!', '%', '*', '#', '?', '&'];
-
-        // Guarantee at least one of each required type
-        $password = '';
-        $password .= $upper[array_rand($upper)];
-        $password .= $lower[array_rand($lower)];
-        $password .= $numbers[array_rand($numbers)];
-        $password .= $specials[array_rand($specials)];
-
-        // Fill the rest with random characters from all pools
-        $all = array_merge($upper, $lower, $numbers, $specials);
-        for ($i = 0; $i < 4; $i++) {
-            $password .= $all[array_rand($all)];
-        }
-
-        // Shuffle to avoid predictable positions
-        return str_shuffle($password);
+        return Str::password(16);
     }
 }

@@ -15,10 +15,10 @@ class StoreIdentificationRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'apellido_paterno' => ['required', 'string', 'max:100'],
-            'apellido_materno' => ['nullable', 'string', 'max:100'],
-            'primer_nombre' => ['required', 'string', 'max:100'],
-            'segundo_nombre' => ['nullable', 'string', 'max:100'],
+            'apellido_paterno' => ['required', 'string', 'max:100', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
+            'apellido_materno' => ['nullable', 'string', 'max:100', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
+            'primer_nombre' => ['required', 'string', 'max:100', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
+            'segundo_nombre' => ['nullable', 'string', 'max:100', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
             'numero_cedula' => [
                 'nullable',
                 'string',

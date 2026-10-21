@@ -36,13 +36,16 @@ class UserProfilePhotoController extends Controller
     public function store(Request $request): JsonResponse
     {
         $request->validate([
-            'foto' => ['required', 'image', 'max:5120'],
+            // OWASP ASVS V12.1.1 / V12.2.1: tamaño máximo y solo formatos de imagen rasterizada
+            'foto' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ]);
 
         $user = Auth::user();
 
         $file = $request->file('foto');
-        $filename = Str::uuid() . '.' . $file->getClientOriginalExtension();
+        // OWASP ASVS V12.3.1: el nombre y la extensión los decide el servidor (según el tipo MIME real),
+        // nunca el nombre de archivo que envía el cliente
+        $filename = Str::uuid() . '.' . $file->extension();
         $path = 'fotos/' . $filename;
 
         Storage::disk('public')->putFileAs('fotos', $file, $filename);
