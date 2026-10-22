@@ -1,5 +1,5 @@
 # Imagen con PHP-FPM + nginx ya configurados para Laravel (escucha en el puerto 8080)
-FROM serversideup/php:8.3-fpm-nginx
+FROM serversideup/php:8.3.36-fpm-nginx
 
 # Extensiones extra: gd para dompdf (imágenes en PDFs), intl y bcmath
 USER root
