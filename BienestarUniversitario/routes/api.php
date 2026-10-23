@@ -213,7 +213,7 @@ Route::prefix('v1/enfermeria')->middleware(['auth:sanctum', 'force_password_chan
 Route::prefix('v1/medicina-general')->middleware(['auth:sanctum', 'force_password_change'])->group(function () {
     // Signos Vitales
     Route::get('/signos-vitales', [MedicinaGeneralController::class, 'indexSignosVitales']);
-    Route::get('/signos-vitales/{id}', [MedicinaGeneralController::class, 'showSignosVitales']);
+    Route::get('/signos-vitales/{id}', [MedicinaGeneralController::class, 'showSignosVitales'])->whereNumber('id');
     Route::post('/signos-vitales', [MedicinaGeneralController::class, 'storeSignosVitales']);
     Route::put('/signos-vitales/{id}', [MedicinaGeneralController::class, 'updateSignosVitales']);
     Route::delete('/signos-vitales/{id}', [MedicinaGeneralController::class, 'destroySignosVitales']);

@@ -3,19 +3,17 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class WelcomeNotification extends Notification implements ShouldQueue
+/**
+ * Se envía en el momento (sin cola): así no depende de un queue:work en el servidor y la
+ * contraseña o el token no quedan guardados en texto plano en la tabla jobs.
+ */
+class WelcomeNotification extends Notification
 {
     use Queueable;
 
-    /**
-     * Retry configuration.
-     */
-    public int $tries = 3;
-    public array $backoff = [30, 120, 300];
 
     /**
      * The user's plain text password (only for welcome email).
@@ -70,15 +68,5 @@ class WelcomeNotification extends Notification implements ShouldQueue
             'name' => $notifiable->name ?? $notifiable->email,
                 'email' => $notifiable->email,
         ];
-    }
-
-    /**
-     * Handle a job failure.
-     */
-    public function failed(\Throwable $exception): void
-    {
-        \Log::error('WelcomeNotification failed for user: ' . $this->notifiable?->email ?? 'unknown', [
-            'error' => $exception->getMessage(),
-        ]);
     }
 }

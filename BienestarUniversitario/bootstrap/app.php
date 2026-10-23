@@ -29,8 +29,12 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->use([
+            // El backend está detrás del proxy de Dokploy (Traefik): sin esto $request->ip() es la IP
+            // del proxy, igual para todos, y los límites por IP se aplicaban a todo el sistema a la vez.
+            \Illuminate\Http\Middleware\TrustProxies::class,
             \Illuminate\Http\Middleware\HandleCors::class,
         ]);
+        $middleware->trustProxies(at: '*');
 
         $middleware->api(prepend: [
             \Illuminate\Http\Middleware\HandleCors::class,

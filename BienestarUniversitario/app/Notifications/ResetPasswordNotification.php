@@ -3,19 +3,17 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class ResetPasswordNotification extends Notification implements ShouldQueue
+/**
+ * Se envía en el momento (sin cola): así no depende de un queue:work en el servidor y la
+ * contraseña o el token no quedan guardados en texto plano en la tabla jobs.
+ */
+class ResetPasswordNotification extends Notification
 {
     use Queueable;
 
-    /**
-     * Retry configuration.
-     */
-    public int $tries = 3;
-    public array $backoff = [30, 120, 300];
 
     /**
      * The password reset token.
@@ -74,15 +72,5 @@ class ResetPasswordNotification extends Notification implements ShouldQueue
         return [
             'token' => $this->token,
         ];
-    }
-
-    /**
-     * Handle a job failure.
-     */
-    public function failed(\Throwable $exception): void
-    {
-        \Log::error('ResetPasswordNotification failed for token: ' . $this->token, [
-            'error' => $exception->getMessage(),
-        ]);
     }
 }

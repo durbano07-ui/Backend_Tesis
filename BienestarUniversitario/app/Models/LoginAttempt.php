@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 class LoginAttempt extends Model
 {
@@ -74,29 +75,39 @@ class LoginAttempt extends Model
     }
 
     /**
-     * Check if the IP or email is currently locked.
+     * Indica si la cuenta (correo) está bloqueada temporalmente.
+     *
+     * El bloqueo es por cuenta y no por IP: en la universidad muchos usuarios comparten la
+     * misma IP pública (NAT), así que los fallos de unos no deben bloquear a los demás.
+     * Los ataques desde una misma IP contra varias cuentas los frena el throttle de la ruta.
      */
-    public static function isLocked(string $email, string $ip): bool
+    public static function isAccountLocked(string $email): bool
     {
-        return static::locked()
-            ->where(function ($query) use ($email, $ip) {
-                $query->where('email', $email)
-                    ->orWhere('ip_address', $ip);
-            })
-            ->exists();
+        return static::locked()->where('email', $email)->exists();
     }
 
     /**
-     * Get the number of failed attempts for an email/IP since a given time.
+     * Intentos fallidos de la cuenta en los últimos $minutes minutos. El contador vuelve a cero
+     * al iniciar sesión correctamente y al terminar un bloqueo (los intentos hechos mientras
+     * estaba bloqueada no cuentan).
      */
-    public static function getFailedAttemptsCount(string $email, string $ip, int $minutes = 15): int
+    public static function failedAttemptsForAccount(string $email, int $minutes = 15): int
     {
+        $since = now()->subMinutes($minutes);
+
+        $lastLockEnd = static::where('email', $email)->whereNotNull('locked_until')->max('locked_until');
+        if ($lastLockEnd && Carbon::parse($lastLockEnd)->greaterThan($since)) {
+            $since = Carbon::parse($lastLockEnd);
+        }
+
+        // Por id y no por fecha: los registros del mismo segundo quedan en el orden correcto
+        $lastSuccessId = static::successful()->where('email', $email)->max('id') ?? 0;
+
         return static::failed()
-            ->where(function ($query) use ($email, $ip) {
-                $query->where('email', $email)
-                    ->orWhere('ip_address', $ip);
-            })
-            ->where('created_at', '>=', now()->subMinutes($minutes))
+            ->where('email', $email)
+            ->whereNull('locked_until')
+            ->where('created_at', '>=', $since)
+            ->where('id', '>', $lastSuccessId)
             ->count();
     }
 }

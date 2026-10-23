@@ -31,8 +31,8 @@ class AuthController extends Controller
         $ip = $request->ip();
         $email = $request->email;
 
-        // Check if IP or email is locked
-        if (LoginAttempt::isLocked($email, $ip)) {
+        // Bloqueo por cuenta: 5 intentos fallidos de ESTE correo en 15 minutos
+        if (LoginAttempt::isAccountLocked($email)) {
             $this->recordLoginAttempt($email, $ip, $request, false);
             throw ValidationException::withMessages([
                 'email' => ['Account temporarily locked due to too many failed attempts. Try again later.'],
@@ -55,11 +55,6 @@ class AuthController extends Controller
                 'email' => ['Account is disabled'],
             ]);
         }
-
-        // Clear any previous lockouts on successful login
-        LoginAttempt::where('email', $email)
-            ->orWhere('ip_address', $ip)
-            ->update(['locked_until' => null]);
 
         // Create Sanctum token
         $token = $user->createToken('api-token')->plainTextToken;
@@ -94,7 +89,7 @@ class AuthController extends Controller
     {
         $this->recordLoginAttempt($email, $ip, $request, false);
 
-        $failedAttempts = LoginAttempt::getFailedAttemptsCount($email, $ip);
+        $failedAttempts = LoginAttempt::failedAttemptsForAccount($email);
 
         if ($failedAttempts >= 5) {
             // Lock for 15 minutes
@@ -180,8 +175,12 @@ class AuthController extends Controller
             $user->assignRole($pacienteRole);
         }
 
-        // Send welcome email with credentials
-        $user->notify(new WelcomeNotification($request->password));
+        // Send welcome email with credentials (un fallo del correo no debe impedir el registro)
+        try {
+            $user->notify(new WelcomeNotification($request->password));
+        } catch (\Throwable $e) {
+            \Log::error('Error al enviar el correo de bienvenida al usuario ' . $user->id . ': ' . $e->getMessage());
+        }
 
         $this->recordAuditLog(
             $user,
@@ -222,7 +221,11 @@ class AuthController extends Controller
             $token = app('auth.password.broker')->createToken($user);
             
             // Send the notification via email
-            $user->notify(new ResetPasswordNotification($token));
+            try {
+                $user->notify(new ResetPasswordNotification($token));
+            } catch (\Throwable $e) {
+                \Log::error('Error al enviar el correo de recuperación al usuario ' . $user->id . ': ' . $e->getMessage());
+            }
         }
 
         // Always return success to prevent email enumeration

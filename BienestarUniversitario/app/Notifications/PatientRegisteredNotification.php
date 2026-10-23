@@ -3,16 +3,16 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class PatientRegisteredNotification extends Notification implements ShouldQueue
+/**
+ * Se envía en el momento (sin cola): así no depende de un queue:work en el servidor y la
+ * contraseña o el token no quedan guardados en texto plano en la tabla jobs.
+ */
+class PatientRegisteredNotification extends Notification
 {
     use Queueable;
-
-    public int $tries = 3;
-    public array $backoff = [30, 120, 300];
 
     public string $password;
     public string $patientName;
@@ -63,15 +63,5 @@ class PatientRegisteredNotification extends Notification implements ShouldQueue
         return [
             'email' => $notifiable->email,
         ];
-    }
-
-    /**
-     * Handle a job failure.
-     */
-    public function failed(\Throwable $exception): void
-    {
-        \Log::error('PatientRegisteredNotification failed for user: ' . ($this->notifiable?->email ?? 'unknown'), [
-            'error' => $exception->getMessage(),
-        ]);
     }
 }
