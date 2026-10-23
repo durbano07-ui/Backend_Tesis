@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 class CitaMedica extends Model
 {
@@ -69,9 +70,15 @@ class CitaMedica extends Model
     /**
      * Marca como "no_asistio" las citas pendientes cuyo margen de atención ya terminó.
      * Se ejecuta antes de listar o modificar citas, así no depende de un cron en el servidor.
+     * Como las pantallas se actualizan solas cada pocos segundos, corre como máximo una vez por
+     * minuto; completar() y syncAutoCita() revisan además el margen de cada cita por su cuenta.
      */
     public static function marcarInasistencias(): int
     {
+        if (!Cache::add('citas:marcar_inasistencias', true, 60)) {
+            return 0;
+        }
+
         // fin del margen <= ahora  <=>  inicio de la cita <= ahora - margen
         $limite = Carbon::now()->subHours(self::HORAS_MARGEN_ATENCION);
 

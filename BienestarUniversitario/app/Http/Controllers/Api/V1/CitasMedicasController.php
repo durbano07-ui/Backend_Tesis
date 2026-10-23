@@ -534,6 +534,12 @@ class CitasMedicasController extends Controller
         }
 
         // Solo el día de la cita (el paciente puede llegar antes) y hasta el fin del margen
+        if (Carbon::now()->greaterThanOrEqualTo($cita->finMargenAtencion())) {
+            $cita->update(['estado' => 'no_asistio']);
+            return response()->json([
+                'message' => 'El margen de ' . CitaMedica::HORAS_MARGEN_ATENCION . ' horas para atender esta cita terminó; quedó registrada como "No asistió"',
+            ], 422);
+        }
         if ($cita->fecha->toDateString() > Carbon::today()->toDateString()) {
             return response()->json([
                 'message' => 'La cita es para el ' . $cita->fecha->format('d/m/Y') . '; solo se puede completar ese día',
@@ -586,6 +592,8 @@ class CitasMedicasController extends Controller
             ->where('id_usuario_doctor', $doctorId)
             ->whereIn('estado', CitaMedica::ESTADOS_PENDIENTES)
             ->whereDate('fecha', $today)
+            // margen abierto: inicio + margen > ahora
+            ->where('hora_inicio', '>', $now->copy()->subHours(CitaMedica::HORAS_MARGEN_ATENCION)->format('H:i'))
             ->orderBy('hora_inicio', 'asc')
             ->first();
 

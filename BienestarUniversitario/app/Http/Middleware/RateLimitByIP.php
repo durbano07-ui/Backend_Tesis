@@ -19,18 +19,23 @@ class RateLimitByIP
     public function handle(Request $request, Closure $next): Response
     {
         $ip = $request->ip();
-        $key = "rate_limit:{$ip}";
+
+        // Con sesión iniciada el límite es por usuario (token), no por IP: en la universidad todos
+        // salen a internet con la misma IP pública (NAT) y la actualización automática de las
+        // pantallas haría que el límite de una IP se agotara para todo el campus a la vez.
+        $token = $request->bearerToken();
+        $key = $token ? 'rate_limit:token:' . hash('sha256', $token) : "rate_limit:{$ip}";
         $threshold = (int) env('RATE_LIMIT_REQUESTS_PER_MINUTE', 500);
 
-        if (!Cache::has($key)) {
-            Cache::put($key, 1, 60); // Ventana fija de 60 segundos
-            $requests = 1;
-        } else {
-            $requests = (int) Cache::increment($key);
-        }
+        // Tope por IP mucho más alto: frena a quien envíe muchas peticiones con tokens inventados
+        $ipKey = "rate_limit_ip:{$ip}";
+        $ipThreshold = (int) env('RATE_LIMIT_IP_REQUESTS_PER_MINUTE', 5000);
+
+        $requests = $this->hit($key);
+        $ipRequests = $token ? $this->hit($ipKey) : $requests;
 
         // Check if threshold exceeded
-        if ($requests > $threshold) {
+        if ($requests > $threshold || $ipRequests > $ipThreshold) {
             // Log the security event
             SecurityLog::logRateLimitExceeded(
                 $ip,
@@ -44,5 +49,15 @@ class RateLimitByIP
         }
 
         return $next($request);
+    }
+
+    /** Suma una petición a la ventana fija de 60 segundos de $key y devuelve el total. */
+    private function hit(string $key): int
+    {
+        if (Cache::add($key, 1, 60)) {
+            return 1;
+        }
+
+        return (int) Cache::increment($key);
     }
 }
