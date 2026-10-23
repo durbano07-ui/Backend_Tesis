@@ -15,7 +15,7 @@ class UpdateCitaMedicaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'estado' => ['sometimes', 'string', Rule::in(['programada', 'confirmada', 'completada', 'cancelada'])],
+            'estado' => ['sometimes', 'string', Rule::in(['programada', 'confirmada', 'completada', 'cancelada', 'no_asistio'])],
             'notas_doctor' => ['nullable', 'string', 'max:1000'],
             'motivo' => ['nullable', 'string', 'max:500'],
         ];

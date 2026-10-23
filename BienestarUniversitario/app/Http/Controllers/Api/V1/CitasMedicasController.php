@@ -67,6 +67,7 @@ class CitasMedicasController extends Controller
      */
     public function misCitas(Request $request): JsonResponse
     {
+        CitaMedica::marcarInasistencias();
         $user = Auth::user();
         $query = CitaMedica::where('id_usuario_paciente', $user->id)
             ->with(['doctor.datosIdentificacion']);
@@ -90,6 +91,7 @@ class CitasMedicasController extends Controller
      */
     public function citasDoctor(Request $request): JsonResponse
     {
+        CitaMedica::marcarInasistencias();
         $user = Auth::user();
         $query = CitaMedica::where('id_usuario_doctor', $user->id)
             ->with(['paciente.datosIdentificacion']);
@@ -421,6 +423,7 @@ class CitasMedicasController extends Controller
      */
     public function cancelar(int $id): JsonResponse
     {
+        CitaMedica::marcarInasistencias();
         $user = Auth::user();
         $cita = CitaMedica::where('id', $id)
             ->where(function ($q) use ($user) {
@@ -433,9 +436,9 @@ class CitasMedicasController extends Controller
             return response()->json(['message' => 'Cita not found'], 404);
         }
 
-        if (in_array($cita->estado, ['completada', 'cancelada'])) {
+        if (!in_array($cita->estado, CitaMedica::ESTADOS_PENDIENTES, true)) {
             return response()->json([
-                'message' => 'No se puede cancelar una cita que ya fue completada o cancelada',
+                'message' => 'Solo se pueden cancelar citas programadas o confirmadas',
             ], 422);
         }
 
@@ -480,6 +483,7 @@ class CitasMedicasController extends Controller
      */
     public function confirmar(int $id): JsonResponse
     {
+        CitaMedica::marcarInasistencias();
         $user = Auth::user();
         $cita = CitaMedica::where('id', $id)
             ->where('id_usuario_doctor', $user->id)
@@ -506,8 +510,9 @@ class CitasMedicasController extends Controller
     /**
      * Completar una cita (solo el doctor)
      */
-    public function completar(int $id): JsonResponse
+    public function completar(Request $request, int $id): JsonResponse
     {
+        CitaMedica::marcarInasistencias();
         $user = Auth::user();
         $cita = CitaMedica::where('id', $id)
             ->where('id_usuario_doctor', $user->id)
@@ -517,15 +522,27 @@ class CitasMedicasController extends Controller
             return response()->json(['message' => 'Cita not found'], 404);
         }
 
-        if ($cita->estado === 'cancelada') {
+        if (!in_array($cita->estado, CitaMedica::ESTADOS_PENDIENTES, true)) {
+            $mensajes = [
+                'completada' => 'Esta cita ya fue completada',
+                'cancelada' => 'No se puede completar una cita cancelada',
+                'no_asistio' => 'El margen de ' . CitaMedica::HORAS_MARGEN_ATENCION . ' horas para atender esta cita terminó; quedó registrada como "No asistió"',
+            ];
             return response()->json([
-                'message' => 'No se puede completar una cita cancelada',
+                'message' => $mensajes[$cita->estado] ?? 'Esta cita no se puede completar',
+            ], 422);
+        }
+
+        // Solo el día de la cita (el paciente puede llegar antes) y hasta el fin del margen
+        if ($cita->fecha->toDateString() > Carbon::today()->toDateString()) {
+            return response()->json([
+                'message' => 'La cita es para el ' . $cita->fecha->format('d/m/Y') . '; solo se puede completar ese día',
             ], 422);
         }
 
         $cita->update([
             'estado' => 'completada',
-            'notas_doctor' => $cita->notas_doctor,
+            'notas_doctor' => $request->input('notas_doctor') ?: $cita->notas_doctor,
         ]);
 
         try {
@@ -560,21 +577,17 @@ class CitasMedicasController extends Controller
         $today = Carbon::today()->toDateString();
         $now = Carbon::now();
 
-        // 1. Buscar cita pendiente del paciente con este doctor en el día de hoy
+        CitaMedica::marcarInasistencias();
+
+        // 1. Buscar la cita pendiente de HOY del paciente con este profesional cuyo margen de
+        //    atención sigue abierto. No se toman citas de otros días: una cita futura no debe
+        //    darse por atendida, y una pasada ya quedó como "no_asistio".
         $citaExistente = CitaMedica::where('id_usuario_paciente', $patientId)
             ->where('id_usuario_doctor', $doctorId)
-            ->whereIn('estado', ['programada', 'confirmada'])
+            ->whereIn('estado', CitaMedica::ESTADOS_PENDIENTES)
             ->whereDate('fecha', $today)
+            ->orderBy('hora_inicio', 'asc')
             ->first();
-
-        // Si no hay hoy, buscar cualquier cita pendiente previa del paciente con este doctor
-        if (!$citaExistente) {
-            $citaExistente = CitaMedica::where('id_usuario_paciente', $patientId)
-                ->where('id_usuario_doctor', $doctorId)
-                ->whereIn('estado', ['programada', 'confirmada'])
-                ->orderBy('fecha', 'asc')
-                ->first();
-        }
 
         if ($citaExistente) {
             $citaExistente->update([
@@ -632,6 +645,7 @@ class CitasMedicasController extends Controller
      */
     public function confirmarAsistencia(int $id): JsonResponse
     {
+        CitaMedica::marcarInasistencias();
         $user = Auth::user();
         $cita = CitaMedica::where('id', $id)
             ->where('id_usuario_paciente', $user->id)
@@ -641,9 +655,9 @@ class CitasMedicasController extends Controller
             return response()->json(['message' => 'Cita not found'], 404);
         }
 
-        if (in_array($cita->estado, ['completada', 'cancelada'])) {
+        if (!in_array($cita->estado, CitaMedica::ESTADOS_PENDIENTES, true)) {
             return response()->json([
-                'message' => 'No se puede confirmar asistencia a una cita completada o cancelada',
+                'message' => 'Solo se puede confirmar asistencia a citas programadas o confirmadas',
             ], 422);
         }
 
@@ -703,6 +717,7 @@ class CitasMedicasController extends Controller
      */
     public function calendarioDoctor(Request $request): JsonResponse
     {
+        CitaMedica::marcarInasistencias();
         $user = Auth::user();
 
         $request->validate([
