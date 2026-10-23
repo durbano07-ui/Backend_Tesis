@@ -60,6 +60,24 @@ class CitaMedica extends Model
         return $this->finMargenAtencion()->format('Y-m-d\TH:i:s');
     }
 
+    /**
+     * Citas programadas o confirmadas cuyo margen de atención sigue abierto (aún pueden atenderse).
+     * No depende de que marcarInasistencias() ya haya corrido.
+     */
+    public function scopePendientesVigentes($query)
+    {
+        $limite = Carbon::now()->subHours(self::HORAS_MARGEN_ATENCION);
+
+        return $query->whereIn('estado', self::ESTADOS_PENDIENTES)
+            ->where(function ($q) use ($limite) {
+                $q->whereDate('fecha', '>', $limite->toDateString())
+                    ->orWhere(function ($q2) use ($limite) {
+                        $q2->whereDate('fecha', $limite->toDateString())
+                            ->where('hora_inicio', '>', $limite->format('H:i'));
+                    });
+            });
+    }
+
     /** Momento en que termina el margen de atención de la cita. */
     public function finMargenAtencion(): Carbon
     {

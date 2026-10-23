@@ -362,16 +362,39 @@ class CitasMedicasController extends Controller
             ], 422);
         }
 
-        // Verificar que el paciente no tenga otra cita en ese mismo horario
+        // Verificar que el paciente no tenga otra cita pendiente en ese mismo horario (en cualquier área)
         $pacienteOcupado = CitaMedica::where('id_usuario_paciente', $user->id)
             ->where('fecha', $fecha->toDateString())
             ->where('hora_inicio', $horaInicio)
-            ->whereNotIn('estado', ['cancelada'])
+            ->pendientesVigentes()
             ->exists();
 
         if ($pacienteOcupado) {
             return response()->json([
-                'message' => 'Ya tienes una cita agendada en este horario',
+                'message' => 'Ya tienes una cita agendada en este horario en otra área. Elige otro horario.',
+            ], 422);
+        }
+
+        // Una sola cita pendiente por área: para agendar otra, la anterior debe completarse,
+        // cancelarse o haber pasado su margen de atención ("No asistió")
+        $pendienteMismaArea = CitaMedica::where('id_usuario_paciente', $user->id)
+            ->where('rol_doctor', $rolDoctor)
+            ->pendientesVigentes()
+            ->orderBy('fecha')
+            ->orderBy('hora_inicio')
+            ->first();
+
+        if ($pendienteMismaArea) {
+            $areas = [
+                'medico_general' => 'Medicina General',
+                'psicologo' => 'Psicología',
+                'odontologo' => 'Odontología',
+                'medico_ocupacional' => 'Medicina Ocupacional',
+            ];
+            return response()->json([
+                'message' => 'Ya tienes una cita pendiente en ' . ($areas[$rolDoctor] ?? 'esta área')
+                    . ' para el ' . $pendienteMismaArea->fecha->format('d/m/Y') . ' a las ' . substr($pendienteMismaArea->hora_inicio, 0, 5)
+                    . '. Podrás agendar otra cuando esa cita se complete o si la cancelas.',
             ], 422);
         }
 
@@ -397,7 +420,7 @@ class CitasMedicasController extends Controller
             $doctor->notify(new CitaMedicaNotification(
                 'nueva_cita',
                 'Nueva Cita Agendada',
-                "El paciente {$pacienteNombre} agendó cita para el {$cita->fecha} a las {$cita->hora_inicio}.",
+                "El paciente {$pacienteNombre} agendó cita para el {$cita->fecha->format('d/m/Y')} a las {$cita->hora_inicio}.",
                 $cita
             ));
 
@@ -405,7 +428,7 @@ class CitasMedicasController extends Controller
             $user->notify(new CitaMedicaNotification(
                 'cita_agendada',
                 'Cita Reservada con Éxito',
-                "Tu cita con {$doctorNombre} ha sido reservada para el {$cita->fecha} a las {$cita->hora_inicio}.",
+                "Tu cita con {$doctorNombre} ha sido reservada para el {$cita->fecha->format('d/m/Y')} a las {$cita->hora_inicio}.",
                 $cita
             ));
         } catch (\Throwable $e) {
@@ -456,7 +479,7 @@ class CitasMedicasController extends Controller
                 $cita->doctor?->notify(new CitaMedicaNotification(
                     'cita_cancelada',
                     'Cita Cancelada por Paciente',
-                    "El paciente {$pacienteNombre} canceló su cita del {$cita->fecha} a las {$cita->hora_inicio}.",
+                    "El paciente {$pacienteNombre} canceló su cita del {$cita->fecha->format('d/m/Y')} a las {$cita->hora_inicio}.",
                     $cita
                 ));
             } else {
@@ -464,7 +487,7 @@ class CitasMedicasController extends Controller
                 $cita->paciente?->notify(new CitaMedicaNotification(
                     'cita_cancelada',
                     'Cita Cancelada',
-                    "Tu cita con {$doctorNombre} del {$cita->fecha} a las {$cita->hora_inicio} ha sido cancelada.",
+                    "Tu cita con {$doctorNombre} del {$cita->fecha->format('d/m/Y')} a las {$cita->hora_inicio} ha sido cancelada.",
                     $cita
                 ));
             }
@@ -683,7 +706,7 @@ class CitasMedicasController extends Controller
             $cita->doctor?->notify(new CitaMedicaNotification(
                 'asistencia_confirmada',
                 'Asistencia Confirmada',
-                "El paciente {$pacienteNombre} confirmó su asistencia para la cita del {$cita->fecha} a las {$cita->hora_inicio}.",
+                "El paciente {$pacienteNombre} confirmó su asistencia para la cita del {$cita->fecha->format('d/m/Y')} a las {$cita->hora_inicio}.",
                 $cita
             ));
         } catch (\Throwable $e) {

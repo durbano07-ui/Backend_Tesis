@@ -20,7 +20,7 @@ class NotificationController extends Controller
             return array_merge($data, [
                 'id' => $n->id,
                 'leida' => !is_null($n->read_at),
-                'creada_en' => $n->created_at ? $n->created_at->diffForHumans() : 'Reciente',
+                'creada_en' => $n->created_at ? $n->created_at->locale('es')->diffForHumans() : 'Reciente',
                 'timestamp' => $n->created_at ? $n->created_at->getTimestampMs() : now()->getTimestampMs(),
             ]);
         });
