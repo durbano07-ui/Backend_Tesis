@@ -28,6 +28,8 @@ use Illuminate\Support\Facades\DB;
 
 class OdontologiaController extends Controller
 {
+    use \App\Http\Controllers\Concerns\ScopesHistoryByDepartment;
+
     // ==========================================
     // MOTIVO CONSULTA ODONTOLOGIA
     // ==========================================
@@ -334,13 +336,8 @@ class OdontologiaController extends Controller
     public function indexParteDiario(Request $request): JsonResponse
     {
         $user = Auth::user();
-        // Historial de un paciente: registros de todos los profesionales (vista integrada; el acceso
-        // entre módulos lo controla RestrictStaffModuleAccess). Sin paciente: solo los propios.
-        if ($request->filled('id_usuario_paciente')) {
-            $query = ParteDiarioOdontologia::where('id_usuario_paciente', $request->id_usuario_paciente);
-        } else {
-            $query = ParteDiarioOdontologia::where('id_usuario_doctor', $user->id);
-        }
+        // Historial por departamento (ver ScopesHistoryByDepartment)
+        $query = $this->historyQuery(ParteDiarioOdontologia::class, $request);
         $partes = $query->with(['paciente.datosIdentificacion'])->get();
         return response()->json(['data' => $partes, 'message' => 'Partes diarios retrieved']);
     }

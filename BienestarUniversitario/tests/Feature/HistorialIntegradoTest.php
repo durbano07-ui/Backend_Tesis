@@ -10,8 +10,8 @@ use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
 /**
- * Vista integrada del paciente: al consultar el historial de un paciente, cada profesional ve los
- * registros de todas las áreas, no solo los que él mismo creó.
+ * Historial por departamento: al consultar a un paciente, cada profesional ve los registros de su
+ * propio departamento; el médico coordinador ve los de todas las áreas.
  */
 class HistorialIntegradoTest extends TestCase
 {
@@ -47,24 +47,52 @@ class HistorialIntegradoTest extends TestCase
         return ['Authorization' => 'Bearer ' . $user->createToken('t')->plainTextToken];
     }
 
-    public function test_el_medico_ocupacional_ve_los_signos_vitales_registrados_por_enfermeria(): void
+    private function signos(User $doctor, User $paciente): void
     {
-        $enfermero = $this->userWithRole('enfermero');
-        $ocupacional = $this->userWithRole('medico_ocupacional');
-        $paciente = $this->userWithRole('paciente');
-
         SignosVitales::create([
-            'id_usuario_doctor' => $enfermero->id,
+            'id_usuario_doctor' => $doctor->id,
             'id_usuario_paciente' => $paciente->id,
             'fecha' => now()->toDateString(),
             'presion_arterial_sistolica' => 118,
             'presion_arterial_diastolica' => 76,
         ]);
+    }
 
-        $this->withHeaders($this->bearer($ocupacional))
-            ->getJson("/api/v1/enfermeria/signos-vitales?id_usuario_paciente={$paciente->id}")
+    private function consultar(User $quien, User $paciente)
+    {
+        return $this->withHeaders($this->bearer($quien))
+            ->getJson("/api/v1/enfermeria/signos-vitales?id_usuario_paciente={$paciente->id}");
+    }
+
+    public function test_el_medico_ocupacional_no_ve_los_registros_de_enfermeria(): void
+    {
+        $paciente = $this->userWithRole('paciente');
+        $this->signos($this->userWithRole('enfermero'), $paciente);
+
+        $this->consultar($this->userWithRole('medico_ocupacional'), $paciente)
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
+    public function test_el_medico_ocupacional_ve_los_registros_de_otro_medico_ocupacional(): void
+    {
+        $paciente = $this->userWithRole('paciente');
+        $this->signos($this->userWithRole('medico_ocupacional'), $paciente);
+
+        $this->consultar($this->userWithRole('medico_ocupacional'), $paciente)
             ->assertOk()
             ->assertJsonCount(1, 'data');
+    }
+
+    public function test_el_medico_coordinador_ve_los_registros_de_todas_las_areas(): void
+    {
+        $paciente = $this->userWithRole('paciente');
+        $this->signos($this->userWithRole('enfermero'), $paciente);
+        $this->signos($this->userWithRole('medico_ocupacional'), $paciente);
+
+        $this->consultar($this->userWithRole('medico_coordinador'), $paciente)
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
     }
 
     public function test_sin_paciente_cada_profesional_solo_ve_sus_registros(): void

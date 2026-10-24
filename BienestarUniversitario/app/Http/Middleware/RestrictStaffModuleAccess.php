@@ -88,7 +88,8 @@ class RestrictStaffModuleAccess
             return true;
         }
 
-        if ($method === 'GET' && array_intersect($roles, self::CLINICAL) && preg_match(self::SHARED_READ, $path)) {
+        // El médico coordinador también lee el resumen clínico (solo lectura) de todas las áreas
+        if ($method === 'GET' && array_intersect($roles, [...self::CLINICAL, 'medico_coordinador']) && preg_match(self::SHARED_READ, $path)) {
             return true;
         }
 

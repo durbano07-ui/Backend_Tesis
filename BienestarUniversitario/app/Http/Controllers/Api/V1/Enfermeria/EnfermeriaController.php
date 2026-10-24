@@ -17,6 +17,8 @@ use Illuminate\Support\Facades\Auth;
 
 class EnfermeriaController extends Controller
 {
+    use \App\Http\Controllers\Concerns\ScopesHistoryByDepartment;
+
     // ==========================================
     // PROCEDIMIENTOS DE ENFERMERIA
     // ==========================================
@@ -108,13 +110,8 @@ class EnfermeriaController extends Controller
     public function indexSignosVitales(Request $request): JsonResponse
     {
         $user = Auth::user();
-        // Historial de un paciente: registros de todos los profesionales (vista integrada; el acceso
-        // entre módulos lo controla RestrictStaffModuleAccess). Sin paciente: solo los propios.
-        if ($request->filled('id_usuario_paciente')) {
-            $query = SignosVitales::where('id_usuario_paciente', $request->id_usuario_paciente);
-        } else {
-            $query = SignosVitales::where('id_usuario_doctor', $user->id);
-        }
+        // Historial por departamento (ver ScopesHistoryByDepartment)
+        $query = $this->historyQuery(SignosVitales::class, $request);
 
         $signosVitales = $query->with(['paciente.datosIdentificacion', 'medicoGeneral'])->get();
 
@@ -208,13 +205,8 @@ class EnfermeriaController extends Controller
     public function indexParteDiario(Request $request): JsonResponse
     {
         $user = Auth::user();
-        // Historial de un paciente: registros de todos los profesionales (vista integrada; el acceso
-        // entre módulos lo controla RestrictStaffModuleAccess). Sin paciente: solo los propios.
-        if ($request->filled('id_usuario_paciente')) {
-            $query = ParteDiarioEnfermeria::where('id_usuario_paciente', $request->id_usuario_paciente);
-        } else {
-            $query = ParteDiarioEnfermeria::where('id_usuario_doctor', $user->id);
-        }
+        // Historial por departamento (ver ScopesHistoryByDepartment)
+        $query = $this->historyQuery(ParteDiarioEnfermeria::class, $request);
 
         $partes = $query->with(['paciente.datosIdentificacion', 'procedimiento'])->get();
 

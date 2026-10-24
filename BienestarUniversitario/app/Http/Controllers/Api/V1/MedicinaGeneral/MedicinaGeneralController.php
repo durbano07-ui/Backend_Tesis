@@ -31,6 +31,8 @@ use Illuminate\Support\Facades\Auth;
 
 class MedicinaGeneralController extends Controller
 {
+    use \App\Http\Controllers\Concerns\ScopesHistoryByDepartment;
+
     // ==========================================
     // SIGNOS VITALES (el médico puede crear y modificar)
     // ==========================================
@@ -155,13 +157,8 @@ class MedicinaGeneralController extends Controller
     public function indexParteDiario(Request $request): JsonResponse
     {
         $user = Auth::user();
-        // Historial de un paciente: registros de todos los profesionales (vista integrada; el acceso
-        // entre módulos lo controla RestrictStaffModuleAccess). Sin paciente: solo los propios.
-        if ($request->filled('id_usuario_paciente')) {
-            $query = ParteDiarioMedicina::where('id_usuario_paciente', $request->id_usuario_paciente);
-        } else {
-            $query = ParteDiarioMedicina::where('id_usuario_doctor', $user->id);
-        }
+        // Historial por departamento (ver ScopesHistoryByDepartment)
+        $query = $this->historyQuery(ParteDiarioMedicina::class, $request);
 
         $partes = $query->with(['paciente.datosIdentificacion'])->get();
 
@@ -905,13 +902,8 @@ class MedicinaGeneralController extends Controller
     public function indexHistorialEvolucion(Request $request): JsonResponse
     {
         $user = Auth::user();
-        // Historial de un paciente: registros de todos los profesionales (vista integrada; el acceso
-        // entre módulos lo controla RestrictStaffModuleAccess). Sin paciente: solo los propios.
-        if ($request->filled('id_usuario_paciente')) {
-            $query = HistorialEvolucionMedicina::where('id_usuario_paciente', $request->id_usuario_paciente);
-        } else {
-            $query = HistorialEvolucionMedicina::where('id_usuario_doctor', $user->id);
-        }
+        // Historial por departamento (ver ScopesHistoryByDepartment)
+        $query = $this->historyQuery(HistorialEvolucionMedicina::class, $request);
 
         return response()->json([
             'data' => $query->with(['paciente.datosIdentificacion'])->orderBy('fecha', 'desc')->get(),
