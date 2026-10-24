@@ -334,14 +334,14 @@ class OdontologiaController extends Controller
     public function indexParteDiario(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $query = ParteDiarioOdontologia::where('id_usuario_doctor', $user->id);
-        if ($request->has('id_usuario_paciente')) {
-            $query->where('id_usuario_paciente', $request->id_usuario_paciente);
+        // Historial de un paciente: registros de todos los profesionales (vista integrada; el acceso
+        // entre módulos lo controla RestrictStaffModuleAccess). Sin paciente: solo los propios.
+        if ($request->filled('id_usuario_paciente')) {
+            $query = ParteDiarioOdontologia::where('id_usuario_paciente', $request->id_usuario_paciente);
+        } else {
+            $query = ParteDiarioOdontologia::where('id_usuario_doctor', $user->id);
         }
         $partes = $query->with(['paciente.datosIdentificacion'])->get();
-        if ($partes->isEmpty() && !$request->has('id_usuario_paciente')) {
-            $partes = ParteDiarioOdontologia::with(['paciente.datosIdentificacion'])->get();
-        }
         return response()->json(['data' => $partes, 'message' => 'Partes diarios retrieved']);
     }
 

@@ -155,10 +155,12 @@ class MedicinaGeneralController extends Controller
     public function indexParteDiario(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $query = ParteDiarioMedicina::where('id_usuario_doctor', $user->id);
-
-        if ($request->has('id_usuario_paciente')) {
-            $query->where('id_usuario_paciente', $request->id_usuario_paciente);
+        // Historial de un paciente: registros de todos los profesionales (vista integrada; el acceso
+        // entre módulos lo controla RestrictStaffModuleAccess). Sin paciente: solo los propios.
+        if ($request->filled('id_usuario_paciente')) {
+            $query = ParteDiarioMedicina::where('id_usuario_paciente', $request->id_usuario_paciente);
+        } else {
+            $query = ParteDiarioMedicina::where('id_usuario_doctor', $user->id);
         }
 
         $partes = $query->with(['paciente.datosIdentificacion'])->get();
@@ -903,10 +905,12 @@ class MedicinaGeneralController extends Controller
     public function indexHistorialEvolucion(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $query = HistorialEvolucionMedicina::where('id_usuario_doctor', $user->id);
-
-        if ($request->has('id_usuario_paciente')) {
-            $query->where('id_usuario_paciente', $request->id_usuario_paciente);
+        // Historial de un paciente: registros de todos los profesionales (vista integrada; el acceso
+        // entre módulos lo controla RestrictStaffModuleAccess). Sin paciente: solo los propios.
+        if ($request->filled('id_usuario_paciente')) {
+            $query = HistorialEvolucionMedicina::where('id_usuario_paciente', $request->id_usuario_paciente);
+        } else {
+            $query = HistorialEvolucionMedicina::where('id_usuario_doctor', $user->id);
         }
 
         return response()->json([

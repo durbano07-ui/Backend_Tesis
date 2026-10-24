@@ -108,10 +108,12 @@ class EnfermeriaController extends Controller
     public function indexSignosVitales(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $query = SignosVitales::where('id_usuario_doctor', $user->id);
-
-        if ($request->has('id_usuario_paciente')) {
-            $query->where('id_usuario_paciente', $request->id_usuario_paciente);
+        // Historial de un paciente: registros de todos los profesionales (vista integrada; el acceso
+        // entre módulos lo controla RestrictStaffModuleAccess). Sin paciente: solo los propios.
+        if ($request->filled('id_usuario_paciente')) {
+            $query = SignosVitales::where('id_usuario_paciente', $request->id_usuario_paciente);
+        } else {
+            $query = SignosVitales::where('id_usuario_doctor', $user->id);
         }
 
         $signosVitales = $query->with(['paciente.datosIdentificacion', 'medicoGeneral'])->get();
@@ -206,10 +208,12 @@ class EnfermeriaController extends Controller
     public function indexParteDiario(Request $request): JsonResponse
     {
         $user = Auth::user();
-        $query = ParteDiarioEnfermeria::where('id_usuario_doctor', $user->id);
-
-        if ($request->has('id_usuario_paciente')) {
-            $query->where('id_usuario_paciente', $request->id_usuario_paciente);
+        // Historial de un paciente: registros de todos los profesionales (vista integrada; el acceso
+        // entre módulos lo controla RestrictStaffModuleAccess). Sin paciente: solo los propios.
+        if ($request->filled('id_usuario_paciente')) {
+            $query = ParteDiarioEnfermeria::where('id_usuario_paciente', $request->id_usuario_paciente);
+        } else {
+            $query = ParteDiarioEnfermeria::where('id_usuario_doctor', $user->id);
         }
 
         $partes = $query->with(['paciente.datosIdentificacion', 'procedimiento'])->get();
