@@ -44,9 +44,10 @@ class UserProfileController extends Controller
 
         $existing = DatosIdentificacion::where('id_usuario', $user->id)->first();
         $data = $request->validated();
+        unset($data['es_extranjero']);
 
         if ($existing) {
-            if ($existing->numero_cedula !== null) {
+            if ($existing->numero_cedula !== null && !\App\Support\CedulaEcuatoriana::requiereCorreccion($user)) {
                 $data['numero_cedula'] = $existing->numero_cedula;
             }
             if ($existing->fecha_nacimiento !== null) {
@@ -65,6 +66,49 @@ class UserProfileController extends Controller
             'data' => $identificacion,
             'message' => 'Identification data saved successfully',
         ], 201);
+    }
+
+    /**
+     * Indica si la cuenta debe corregir su cédula (registrada con un número que no pasa el
+     * algoritmo de la cédula ecuatoriana). El frontend muestra entonces un aviso obligatorio.
+     */
+    public function cedulaEstado(Request $request): JsonResponse
+    {
+        $user = $request->user()->load('datosIdentificacion');
+
+        return response()->json([
+            'data' => [
+                'numero_cedula' => $user->datosIdentificacion?->numero_cedula,
+                'requiere_correccion' => \App\Support\CedulaEcuatoriana::requiereCorreccion($user),
+            ],
+        ]);
+    }
+
+    /** Corrige una cédula inválida. Solo se permite mientras la registrada no sea válida. */
+    public function corregirCedula(Request $request): JsonResponse
+    {
+        $user = $request->user()->load('datosIdentificacion');
+
+        if (!\App\Support\CedulaEcuatoriana::requiereCorreccion($user)) {
+            return response()->json(['message' => 'La cédula registrada ya es válida y no puede modificarse desde aquí.'], 422);
+        }
+
+        $data = $request->validate([
+            'numero_cedula' => [
+                'required', 'string',
+                new \App\Rules\CedulaEcuatorianaValida(),
+                \Illuminate\Validation\Rule::unique('datos_identificacion', 'numero_cedula')->ignore($user->id, 'id_usuario'),
+            ],
+        ], [
+            'numero_cedula.unique' => 'Esta cédula ya está registrada en otra cuenta. Comuníquese con Bienestar Universitario.',
+        ]);
+
+        $user->datosIdentificacion->update(['numero_cedula' => $data['numero_cedula']]);
+
+        return response()->json([
+            'data' => ['numero_cedula' => $data['numero_cedula'], 'requiere_correccion' => false],
+            'message' => 'Cédula actualizada correctamente.',
+        ]);
     }
 
     public function updateIdentification(StoreIdentificationRequest $request): JsonResponse

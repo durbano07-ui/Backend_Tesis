@@ -320,7 +320,6 @@ class UserController extends Controller
                     'id_usuario' => $user->id,
                     'primer_nombre' => $pNombre,
                     'apellido_paterno' => $pApellido,
-                    'numero_cedula' => '020' . str_pad($user->id, 7, '0', STR_PAD_LEFT),
                 ]);
             }
         }
@@ -566,7 +565,11 @@ class UserController extends Controller
 
         $request->validate([
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-            'cedula' => ['required', 'string', 'max:20', 'unique:datos_identificacion,numero_cedula'],
+            'cedula' => [
+                'required', 'string', 'max:20', 'unique:datos_identificacion,numero_cedula',
+                // Cédula ecuatoriana validada con su algoritmo; pasaporte para extranjeros
+                $request->input('tipo_documento') === 'pasaporte' ? 'regex:/^[A-Za-z0-9-]{5,20}$/' : new \App\Rules\CedulaEcuatorianaValida(),
+            ],
             'nombre_completo' => ['required', 'string', 'max:255', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
             'id_tipo_usuario' => ['nullable'],
             'tipo' => ['nullable', 'string'],

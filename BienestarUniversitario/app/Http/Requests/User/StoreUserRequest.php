@@ -62,7 +62,15 @@ class StoreUserRequest extends FormRequest
             'segundo_nombre' => ['nullable', 'string', 'max:100', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
             'apellido_paterno' => ['nullable', 'string', 'max:100', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
             'apellido_materno' => ['nullable', 'string', 'max:100', 'regex:/^[\pL\pM\s\'.\-]+$/u'],
-            'numero_cedula' => ['nullable', 'string', 'regex:/^[0-9A-Za-z]{5,20}$/', Rule::unique('datos_identificacion', 'numero_cedula')],
+            'numero_cedula' => [
+                'nullable', 'string', 'regex:/^[0-9A-Za-z]{5,20}$/', Rule::unique('datos_identificacion', 'numero_cedula'),
+                // Solo dígitos = cédula ecuatoriana (con letras se toma como pasaporte)
+                function ($attribute, $value, $fail) {
+                    if (ctype_digit((string) $value) && !\App\Support\CedulaEcuatoriana::esValida((string) $value)) {
+                        $fail('La cédula ingresada no es válida. Verifique los 10 dígitos.');
+                    }
+                },
+            ],
         ];
     }
 

@@ -130,6 +130,9 @@ Route::prefix('v1/user-profile')->middleware('auth:sanctum')->group(function () 
     Route::get('/identification', [UserProfileController::class, 'showIdentification']);
     Route::post('/identification', [UserProfileController::class, 'storeIdentification']);
     Route::put('/identification', [UserProfileController::class, 'updateIdentification']);
+    // Corrección obligatoria de cédulas que no pasan el algoritmo de la cédula ecuatoriana
+    Route::get('/cedula-estado', [UserProfileController::class, 'cedulaEstado']);
+    Route::patch('/cedula', [UserProfileController::class, 'corregirCedula']);
 
     // Children
     Route::get('/children', [UserProfileController::class, 'getChildren']);
