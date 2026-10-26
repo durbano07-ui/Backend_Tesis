@@ -106,6 +106,103 @@ class MedicinaOcupacionalController extends Controller
         return response()->json(['data' => ['id' => $ficha->id], 'message' => 'Ficha registrada'], 201);
     }
 
+    // ==========================================
+    // RECETAS DE LA ATENCIÓN OCUPACIONAL (Recetario)
+    // ==========================================
+
+    /** Recetas emitidas por médicos ocupacionales (Odontología usa las mismas tablas). */
+    public function indexRecetasOcupacionales(): JsonResponse
+    {
+        $recetas = RecetaMedicoocupacional::with([
+            'doctor.datosIdentificacion',
+            'paciente.datosIdentificacion',
+            'paciente.genero',
+            'paciente.estudioCarrera.tipoUsuario',
+            'paciente.cargoMedico',
+            'paciente.tipoSangreActual.tipoSangre',
+            'lineas',
+            'cie10s',
+        ])
+            ->whereHas('doctor.roles', fn ($q) => $q->where('name', 'medico_ocupacional'))
+            ->orderByDesc('fecha')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (RecetaMedicoocupacional $r) => [
+                'id' => $r->id,
+                'fecha' => $r->fecha?->format('Y-m-d'),
+                'cie' => $r->cie10s->pluck('detalle_cie10')->implode(', '),
+                'paciente' => $this->identificacionTrabajador($r->paciente),
+                'doctor' => [
+                    'nombre' => $this->nombreCompleto($r->doctor),
+                    'cedula' => $r->doctor?->datosIdentificacion?->numero_cedula,
+                ],
+                'lineas' => $r->lineas->map(fn ($l) => [
+                    'detalle_medicamento' => $l->detalle_medicamento,
+                    'detalle_dosis' => $l->detalle_dosis,
+                    'frecuencia_horas' => $l->frecuencia_horas,
+                    'duracion_tratamiento_dias' => $l->duracion_tratamiento_dias,
+                    'detalle_via_administracion' => $l->detalle_via_administracion,
+                    'id_producto_farmacia' => $l->id_producto_farmacia,
+                    'cantidad_cajas' => $l->cantidad_cajas,
+                    'cantidad_unidades' => $l->cantidad_unidades,
+                    'estado_despacho' => $l->estado_despacho,
+                ])->values(),
+            ]);
+
+        return response()->json(['data' => $recetas, 'message' => 'Recetas retrieved']);
+    }
+
+    /** Guarda la receta de la atención con todas sus líneas en una sola operación. */
+    public function storeRecetaOcupacional(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'id_usuario_paciente' => ['required', 'integer', 'exists:users,id'],
+            'fecha' => ['required', 'date'],
+            'cie' => ['nullable', 'string', 'max:255'],
+            'lineas' => ['required', 'array', 'min:1'],
+            'lineas.*.detalle_medicamento' => ['required', 'string', 'max:255'],
+            'lineas.*.detalle_dosis' => ['required', 'string', 'max:255'],
+            'lineas.*.frecuencia_horas' => ['required', 'integer', 'min:1', 'max:168'],
+            'lineas.*.duracion_tratamiento_dias' => ['required', 'integer', 'min:1', 'max:365'],
+            'lineas.*.detalle_via_administracion' => ['required', Rule::in(ProductoFarmacia::VIAS_ADMINISTRACION)],
+            // Solo los medicamentos que se entregan en Farmacia llevan producto (y quedan por despachar)
+            'lineas.*.id_producto_farmacia' => ['nullable', 'integer', 'exists:productos_farmacia,id'],
+            'lineas.*.cantidad_cajas' => ['nullable', 'integer', 'min:0'],
+            'lineas.*.cantidad_unidades' => ['nullable', 'integer', 'min:0'],
+        ]);
+
+        $receta = DB::transaction(function () use ($data, $request) {
+            $receta = RecetaMedicoocupacional::create([
+                'id_usuario_doctor' => $request->user()->id,
+                'id_usuario_paciente' => $data['id_usuario_paciente'],
+                'fecha' => $data['fecha'],
+                'estado_enfermedad' => 'agudo',
+            ]);
+            if (!empty($data['cie'])) {
+                RecetaCieMedicoocupacional::create(['id_receta' => $receta->id, 'detalle_cie10' => $data['cie']]);
+            }
+            foreach ($data['lineas'] as $linea) {
+                LineaRecetaMedicoocupacional::create([
+                    'id_receta' => $receta->id,
+                    'id_producto_farmacia' => $linea['id_producto_farmacia'] ?? null,
+                    'detalle_medicamento' => $linea['detalle_medicamento'],
+                    'detalle_dosis' => $linea['detalle_dosis'],
+                    'frecuencia_horas' => $linea['frecuencia_horas'],
+                    'duracion_tratamiento_dias' => $linea['duracion_tratamiento_dias'],
+                    'detalle_via_administracion' => $linea['detalle_via_administracion'],
+                    'detalle_numero_y_letras' => "Cada {$linea['frecuencia_horas']}h por {$linea['duracion_tratamiento_dias']} días",
+                    'cantidad_cajas' => $linea['cantidad_cajas'] ?? 0,
+                    'cantidad_unidades' => $linea['cantidad_unidades'] ?? 0,
+                    'estado_despacho' => 'pendiente',
+                ]);
+            }
+
+            return $receta;
+        });
+
+        return response()->json(['data' => ['id' => $receta->id], 'message' => 'Receta registrada'], 201);
+    }
+
     /** Datos de identificación del trabajador tal como están en su perfil (sin valores supuestos). */
     private function identificacionTrabajador(?User $user): array
     {
@@ -2230,8 +2327,9 @@ class MedicinaOcupacionalController extends Controller
             }
         ])
         ->whereHas('lineas', function ($q) {
-            $q->whereNull('estado_despacho')
-              ->orWhere('estado_despacho', '!=', 'despachado');
+            // Solo se despachan los medicamentos del inventario; los de compra externa no
+            $q->whereNotNull('id_producto_farmacia')
+              ->where(fn ($e) => $e->whereNull('estado_despacho')->orWhere('estado_despacho', '!=', 'despachado'));
         })
         ->orderBy('created_at', 'desc')
         ->get();

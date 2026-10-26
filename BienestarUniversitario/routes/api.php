@@ -512,6 +512,8 @@ Route::prefix('v1/medicina-ocupacional')->middleware(['auth:sanctum', 'force_pas
     Route::put('/patient/{id}/tipo-trabajador', [MedicinaOcupacionalController::class, 'definirTipoTrabajador']);
     Route::get('/fichas', [MedicinaOcupacionalController::class, 'indexFichas']);
     Route::post('/fichas', [MedicinaOcupacionalController::class, 'storeFicha']);
+    Route::get('/recetas-ocupacionales', [MedicinaOcupacionalController::class, 'indexRecetasOcupacionales']);
+    Route::post('/recetas-ocupacionales', [MedicinaOcupacionalController::class, 'storeRecetaOcupacional']);
 });
 
 // Psicologia
