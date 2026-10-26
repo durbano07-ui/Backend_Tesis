@@ -204,9 +204,14 @@ class UserController extends Controller
         $ambito = $request->get('tipo_paciente') ?? $request->get('ambito');
 
         if ($doctor && $doctor->hasRole('medico_ocupacional')) {
-            // Medico Ocupacional: Solo personal de la institucion (Docentes, Administrativos, Codigo de Trabajo: id_tipo_usuario IN [3, 4, 5])
-            $identificacionesQuery->whereHas('user.estudioCarrera', function ($q) {
-                $q->whereIn('id_tipo_usuario', [3, 4, 5]);
+            // Medico Ocupacional: personal de la institucion (Docentes, Administrativos, Codigo de Trabajo:
+            // id_tipo_usuario IN [3, 4, 5]) y pacientes sin tipo definido, a quienes el médico puede asignarles el cargo
+            $identificacionesQuery->whereHas('user', function ($q) {
+                $q->where(function ($sub) {
+                    $sub->whereHas('estudioCarrera', fn ($eq) => $eq->whereIn('id_tipo_usuario', [3, 4, 5]))
+                        ->orWhere(fn ($sinTipo) => $sinTipo->whereDoesntHave('estudioCarrera')
+                            ->whereHas('roles', fn ($rq) => $rq->where('name', 'paciente')));
+                });
             });
         } elseif ($doctor && $doctor->hasAnyRole(['medico_general', 'odontologo', 'psicologo', 'enfermero'])) {
             // Medicos Clinicos Generales / Estudiantiles: Solo estudiantes (id_tipo_usuario = 2 o pacientes que no son personal institucional)
@@ -288,6 +293,8 @@ class UserController extends Controller
                 'tipo_usuario' => $tipoUsuario,
                 'id_tipo_usuario' => $idTipoUsuario,
                 'puestoTrabajo' => $puestoTrabajo,
+                // false: el paciente no ha definido su cargo y el médico ocupacional puede asignarlo
+                'tipo_usuario_confirmado' => $user->tipo_usuario_confirmado_at !== null,
                 'areaTrabajo' => $areaTrabajo,
                 'edad' => $edad,
             ];

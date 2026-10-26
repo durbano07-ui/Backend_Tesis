@@ -35,6 +35,7 @@ use App\Models\TipoExamenMedicoocupacional;
 use App\Models\UsuarioLugarDeTrabajo;
 use App\Models\UsuarioTieneCargo;
 use App\Models\UsuarioTipoSangre;
+use App\Models\UsuarioEstudiaCarrera;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -50,6 +51,46 @@ class MedicinaOcupacionalController extends Controller
     // ==========================================
     // CARGOS PERSONAL
     // ==========================================
+
+    /** Tipos de trabajador que puede definir el médico ocupacional: docente, administrativo, código de trabajo */
+    private const TIPOS_TRABAJADOR = [3, 4, 5];
+
+    /**
+     * El médico ocupacional define el cargo (tipo de trabajador) de un paciente que todavía no lo
+     * ha confirmado en el sistema. Si el paciente ya lo definió, no se cambia.
+     */
+    public function definirTipoTrabajador(Request $request, int $id): JsonResponse
+    {
+        $data = $request->validate([
+            'id_tipo_usuario' => ['required', 'integer', Rule::in(self::TIPOS_TRABAJADOR)],
+        ], [
+            'id_tipo_usuario.in' => 'Seleccione docente, administrativo o código de trabajo.',
+        ]);
+
+        $paciente = User::find($id);
+        if (!$paciente || !$paciente->hasRole('paciente')) {
+            return response()->json(['message' => 'Paciente no encontrado'], 404);
+        }
+        if ($paciente->tipo_usuario_confirmado_at) {
+            return response()->json(['message' => 'El paciente ya definió su cargo en el sistema; no se puede modificar.'], 409);
+        }
+
+        UsuarioEstudiaCarrera::updateOrCreate(['id_usuario' => $paciente->id], [
+            'id_tipo_usuario' => $data['id_tipo_usuario'],
+            // Los trabajadores no registran datos académicos
+            'id_facultad' => null,
+            'id_carrera' => null,
+            'id_ciclo' => null,
+        ]);
+        $paciente->forceFill(['tipo_usuario_confirmado_at' => now()])->save();
+
+        $tipo = DB::table('tipo_usuario')->where('id', $data['id_tipo_usuario'])->value('nombre');
+
+        return response()->json([
+            'data' => ['id_tipo_usuario' => (int) $data['id_tipo_usuario'], 'puestoTrabajo' => "Personal {$tipo}"],
+            'message' => 'Cargo del paciente registrado.',
+        ]);
+    }
 
     public function indexCargos(Request $request): JsonResponse
     {

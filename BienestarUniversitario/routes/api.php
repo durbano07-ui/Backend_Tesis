@@ -509,6 +509,7 @@ Route::prefix('v1/medicina-ocupacional')->middleware(['auth:sanctum', 'force_pas
 
     Route::get('/patient/{id}/blood-type', [MedicinaOcupacionalController::class, 'getPatientBloodType']);
     Route::post('/patient/{id}/blood-type', [MedicinaOcupacionalController::class, 'storePatientBloodType']);
+    Route::put('/patient/{id}/tipo-trabajador', [MedicinaOcupacionalController::class, 'definirTipoTrabajador']);
 });
 
 // Psicologia
