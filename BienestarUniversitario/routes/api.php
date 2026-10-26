@@ -133,6 +133,9 @@ Route::prefix('v1/user-profile')->middleware('auth:sanctum')->group(function () 
     // Corrección obligatoria de cédulas que no pasan el algoritmo de la cédula ecuatoriana
     Route::get('/cedula-estado', [UserProfileController::class, 'cedulaEstado']);
     Route::patch('/cedula', [UserProfileController::class, 'corregirCedula']);
+    // Confirmación obligatoria del tipo de usuario (estudiante, docente, administrativo, código de trabajo)
+    Route::get('/tipo-usuario-estado', [UserProfileController::class, 'tipoUsuarioEstado']);
+    Route::put('/tipo-usuario', [UserProfileController::class, 'confirmarTipoUsuario']);
 
     // Children
     Route::get('/children', [UserProfileController::class, 'getChildren']);

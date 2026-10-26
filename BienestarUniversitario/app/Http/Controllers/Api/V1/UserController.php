@@ -245,8 +245,9 @@ class UserController extends Controller
                 continue; // Evitamos crash si es un registro huerfano sin usuario asociado
             }
 
-            $tipoUsuario = $user->estudioCarrera?->tipoUsuario?->nombre ?? 'Estudiante';
-            $idTipoUsuario = $user->estudioCarrera?->id_tipo_usuario ?? 2;
+            // Sin registro no se asume "Estudiante": el paciente aún no confirmó su tipo
+            $tipoUsuario = $user->estudioCarrera?->tipoUsuario?->nombre ?? 'Sin confirmar';
+            $idTipoUsuario = $user->estudioCarrera?->id_tipo_usuario;
             $nombres = trim(($identificacion->primer_nombre ?? '') . ' ' . ($identificacion->segundo_nombre ?? ''));
             $apellidos = trim(($identificacion->apellido_paterno ?? '') . ' ' . ($identificacion->apellido_materno ?? ''));
             $nombreCompleto = trim("{$nombres} {$apellidos}") ?: ($user->name ?? 'Sin nombre');
@@ -601,24 +602,8 @@ class UserController extends Controller
             $apellidoMaterno = implode(' ', array_slice($nameParts, 3));
         }
 
-        // Determine id_tipo_usuario dynamically (2: Estudiante, 3: Docente, 4: Administrativo, 5: Código de Trabajo)
-        $idTipoUsuario = 2;
-        if ($request->filled('id_tipo_usuario') && is_numeric($request->id_tipo_usuario)) {
-            $idTipoUsuario = (int) $request->id_tipo_usuario;
-        } elseif ($request->filled('tipo')) {
-            $tipoStr = strtolower(trim($request->tipo));
-            if (str_contains($tipoStr, 'estudiante')) {
-                $idTipoUsuario = 2;
-            } elseif (str_contains($tipoStr, 'docente') || str_contains($tipoStr, 'profesor')) {
-                $idTipoUsuario = 3;
-            } elseif (str_contains($tipoStr, 'admin')) {
-                $idTipoUsuario = 4;
-            } elseif (str_contains($tipoStr, 'codigo') || str_contains($tipoStr, 'trabajo') || str_contains($tipoStr, 'servidor')) {
-                $idTipoUsuario = 5;
-            } elseif (str_contains($tipoStr, 'medico') || str_contains($tipoStr, 'médico')) {
-                $idTipoUsuario = 1;
-            }
-        }
+        // El tipo de usuario (estudiante, docente…) NO se registra aquí: lo confirma el propio
+        // paciente al iniciar sesión (antes se asumía "estudiante" por defecto).
 
         // Generate temporary password
         $tempPassword = $this->generateSecurePassword();
@@ -638,21 +623,8 @@ class UserController extends Controller
             $user->assignRole($pacienteRole);
         }
 
-        // Map id_tipo_usuario to Spatie role if defined, or use specified role parameter
-        $typeRoleMap = [
-            2 => 'estudiante',
-            3 => 'docente',
-            4 => 'administrativo',
-            5 => 'codigo_trabajo',
-        ];
-
-        $targetRoleName = $request->input('role') ?? ($typeRoleMap[$idTipoUsuario] ?? null);
-        if ($targetRoleName) {
-            $addRole = Role::where('name', $targetRoleName)->first();
-            if ($addRole) {
-                $user->assignRole($addRole);
-            }
-        }
+        // OWASP ASVS V4.2.1: el paciente solo recibe el rol "paciente". Antes se aceptaba un
+        // parámetro "role" y se asignaba cualquier rol (p. ej. administrador).
 
         // Create identification record
         DatosIdentificacion::create([
@@ -664,12 +636,6 @@ class UserController extends Controller
             'numero_cedula' => trim($request->cedula),
             'fecha_nacimiento' => null,
         ]);
-
-        // Create or update study career / user-type record
-        UsuarioEstudiaCarrera::updateOrCreate(
-            ['id_usuario' => $user->id],
-            ['id_tipo_usuario' => $idTipoUsuario]
-        );
 
         // Send email notification with temporary password
         $this->sendTemporaryPassword($user, $tempPassword, $fullName);

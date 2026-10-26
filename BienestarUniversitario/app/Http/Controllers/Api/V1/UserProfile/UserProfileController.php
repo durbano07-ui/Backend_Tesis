@@ -259,14 +259,80 @@ class UserProfileController extends Controller
         ]);
     }
 
+    private const TIPO_ESTUDIANTE = 2;
+    /** Tipos que puede elegir un paciente (1 = Médico es solo para personal) */
+    private const TIPOS_PACIENTE = [2, 3, 4, 5];
+
+    /**
+     * Indica si el paciente debe confirmar su tipo de usuario. Hasta el 2026-10-25 el registro
+     * asumía "estudiante" por defecto, por lo que se pregunta a todos los pacientes una vez.
+     */
+    public function tipoUsuarioEstado(Request $request): JsonResponse
+    {
+        $user = $request->user()->load('estudioCarrera');
+        $estudio = $user->estudioCarrera;
+
+        return response()->json([
+            'data' => [
+                'requiere_confirmacion' => $user->hasRole('paciente') && $user->tipo_usuario_confirmado_at === null,
+                'id_tipo_usuario' => $estudio?->id_tipo_usuario,
+                'id_carrera' => $estudio?->id_carrera,
+                'id_ciclo' => $estudio?->id_ciclo,
+            ],
+        ]);
+    }
+
+    /**
+     * Guarda el tipo de usuario real del paciente (y carrera/ciclo si es estudiante),
+     * sobrescribiendo lo que hubiera registrado.
+     */
+    public function confirmarTipoUsuario(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'id_tipo_usuario' => ['required', 'integer', \Illuminate\Validation\Rule::in(self::TIPOS_PACIENTE)],
+            'id_carrera' => ['required_if:id_tipo_usuario,' . self::TIPO_ESTUDIANTE, 'nullable', 'integer', 'exists:carrera,id'],
+            'id_ciclo' => ['required_if:id_tipo_usuario,' . self::TIPO_ESTUDIANTE, 'nullable', 'integer', 'exists:ciclos,id'],
+        ], [
+            'id_carrera.required_if' => 'Selecciona tu carrera.',
+            'id_ciclo.required_if' => 'Selecciona tu ciclo o semestre.',
+        ]);
+
+        $user = $request->user();
+        $esEstudiante = (int) $data['id_tipo_usuario'] === self::TIPO_ESTUDIANTE;
+        $carrera = $esEstudiante ? \App\Models\Carrera::find($data['id_carrera']) : null;
+
+        UsuarioEstudiaCarrera::updateOrCreate(['id_usuario' => $user->id], [
+            'id_tipo_usuario' => $data['id_tipo_usuario'],
+            // La facultad se deduce de la carrera; los demás tipos no registran datos académicos
+            'id_facultad' => $carrera?->id_facultad,
+            'id_carrera' => $carrera?->id,
+            'id_ciclo' => $esEstudiante ? $data['id_ciclo'] : null,
+        ]);
+
+        $user->forceFill(['tipo_usuario_confirmado_at' => now()])->save();
+
+        return response()->json([
+            'data' => ['requiere_confirmacion' => false],
+            'message' => 'Tipo de usuario actualizado correctamente.',
+        ]);
+    }
+
     public function storeCareerStudy(StoreCareerStudyRequest $request): JsonResponse
     {
         $user = Auth::user();
+        $data = $request->validated();
 
-        $carrera = UsuarioEstudiaCarrera::updateOrCreate(
-            ['id_usuario' => $user->id],
-            $request->validated()
-        );
+        // Carrera y ciclo solo aplican a estudiantes: si cambia a docente, administrativo, etc.,
+        // se borran los datos de estudiante que tuviera (antes quedaban guardados).
+        if ((int) $data['id_tipo_usuario'] !== self::TIPO_ESTUDIANTE) {
+            $data['id_carrera'] = null;
+            $data['id_ciclo'] = null;
+        }
+
+        $carrera = UsuarioEstudiaCarrera::updateOrCreate(['id_usuario' => $user->id], $data);
+
+        // Completar el perfil también confirma el tipo de usuario
+        $user->forceFill(['tipo_usuario_confirmado_at' => now()])->save();
 
         return response()->json([
             'data' => $carrera->load(['facultad', 'carrera', 'ciclo', 'tipoUsuario']),

@@ -60,6 +60,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'must_change_password' => 'boolean',
             'activo' => 'boolean',
+            'tipo_usuario_confirmado_at' => 'datetime',
         ];
     }
 
