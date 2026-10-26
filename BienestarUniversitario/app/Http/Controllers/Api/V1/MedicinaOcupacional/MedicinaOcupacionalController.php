@@ -10,6 +10,7 @@ use App\Models\AusentismoLaboralMedicoocupacional;
 use App\Models\CeseDeFuncionesMedicoocupacional;
 use App\Models\EnfermedadesCatastroficasMedicoocupacional;
 use App\Models\EnfermedadesNuevasMedicoocupacional;
+use App\Models\FichaMedicoocupacional;
 use App\Models\GrupoFuncionariosDiscapacidadMedicoocupacional;
 use App\Models\GrupoRiesgoPsicosocialMedicoocupacional;
 use App\Models\GrupoTipoExamenMedicoocupacional;
@@ -51,6 +52,92 @@ class MedicinaOcupacionalController extends Controller
     // ==========================================
     // CARGOS PERSONAL
     // ==========================================
+
+    // ==========================================
+    // FICHAS MÉDICAS OCUPACIONALES
+    // ==========================================
+
+    public function indexFichas(Request $request): JsonResponse
+    {
+        $request->validate([
+            'tipo' => ['nullable', Rule::in(FichaMedicoocupacional::TIPOS)],
+            'id_usuario_paciente' => ['nullable', 'integer'],
+        ]);
+
+        $fichas = FichaMedicoocupacional::with([
+            'doctor.datosIdentificacion',
+            'paciente.datosIdentificacion',
+            'paciente.genero',
+            'paciente.estudioCarrera.tipoUsuario',
+            'paciente.cargoMedico',
+            'paciente.tipoSangreActual.tipoSangre',
+        ])
+            ->when($request->filled('tipo'), fn ($q) => $q->where('tipo', $request->tipo))
+            ->when($request->filled('id_usuario_paciente'), fn ($q) => $q->where('id_usuario_paciente', $request->id_usuario_paciente))
+            ->orderByDesc('fecha')
+            ->orderByDesc('id')
+            ->get()
+            ->map(fn (FichaMedicoocupacional $f) => [
+                'id' => $f->id,
+                'tipo' => $f->tipo,
+                'fecha' => $f->fecha?->format('Y-m-d'),
+                'contenido' => $f->contenido ?? [],
+                'paciente' => $this->identificacionTrabajador($f->paciente),
+                'doctor' => [
+                    'nombre' => $this->nombreCompleto($f->doctor),
+                    'cedula' => $f->doctor?->datosIdentificacion?->numero_cedula,
+                ],
+            ]);
+
+        return response()->json(['data' => $fichas, 'message' => 'Fichas retrieved']);
+    }
+
+    public function storeFicha(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'id_usuario_paciente' => ['required', 'integer', 'exists:users,id'],
+            'tipo' => ['required', Rule::in(FichaMedicoocupacional::TIPOS)],
+            'fecha' => ['required', 'date'],
+            'contenido' => ['required', 'array'],
+        ]);
+
+        $ficha = FichaMedicoocupacional::create($data + ['id_usuario_doctor' => $request->user()->id]);
+
+        return response()->json(['data' => ['id' => $ficha->id], 'message' => 'Ficha registrada'], 201);
+    }
+
+    /** Datos de identificación del trabajador tal como están en su perfil (sin valores supuestos). */
+    private function identificacionTrabajador(?User $user): array
+    {
+        if (!$user) {
+            return [];
+        }
+        $d = $user->datosIdentificacion;
+        $tipo = $user->estudioCarrera?->tipoUsuario?->nombre;
+        $genero = $user->genero?->nombre;
+
+        return [
+            'id' => $user->id,
+            'primer_nombre' => $d?->primer_nombre,
+            'segundo_nombre' => $d?->segundo_nombre,
+            'apellido_paterno' => $d?->apellido_paterno,
+            'apellido_materno' => $d?->apellido_materno,
+            'nombre_completo' => $this->nombreCompleto($user),
+            'cedula' => $d?->numero_cedula,
+            'fecha_nacimiento' => $d?->fecha_nacimiento,
+            'sexo' => match ($genero) { 'Masculino' => 'M', 'Femenino' => 'F', default => '' },
+            'tipo_sangre' => $user->tipoSangreActual?->tipoSangre?->nombre,
+            'puestoTrabajo' => $user->cargoMedico?->detalle_cargo ?? ($tipo ? "Personal {$tipo}" : null),
+        ];
+    }
+
+    private function nombreCompleto(?User $user): string
+    {
+        $d = $user?->datosIdentificacion;
+        $nombre = $d ? trim(preg_replace('/\s+/', ' ', "{$d->primer_nombre} {$d->segundo_nombre} {$d->apellido_paterno} {$d->apellido_materno}")) : '';
+
+        return $nombre ?: ($user?->name ?? '');
+    }
 
     /** Tipos de trabajador que puede definir el médico ocupacional: docente, administrativo, código de trabajo */
     private const TIPOS_TRABAJADOR = [3, 4, 5];
