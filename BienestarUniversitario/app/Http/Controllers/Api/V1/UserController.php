@@ -222,8 +222,13 @@ class UserController extends Controller
                 });
             });
         } elseif ($ambito === 'ocupacional') {
-            $identificacionesQuery->whereHas('user.estudioCarrera', function ($q) {
-                $q->whereIn('id_tipo_usuario', [3, 4, 5]);
+            // Trabajadores (docente, administrativo, código de trabajo) y pacientes que aún no
+            // confirmaron su tipo: los registrados por el personal quedan sin tipo hasta que entran.
+            $identificacionesQuery->whereHas('user', function ($q) {
+                $q->where(function ($sub) {
+                    $sub->whereHas('estudioCarrera', fn ($eq) => $eq->whereIn('id_tipo_usuario', [3, 4, 5]))
+                        ->orWhereDoesntHave('estudioCarrera');
+                });
             });
         } elseif ($ambito === 'estudiante') {
             $identificacionesQuery->whereHas('user', function ($q) {
@@ -259,7 +264,11 @@ class UserController extends Controller
                 } catch (\Throwable $e) {}
             }
 
-            $puestoTrabajo = $user->cargoMedico?->detalle_cargo ?? ($tipoUsuario !== 'Estudiante' ? "Personal {$tipoUsuario}" : 'Estudiante');
+            $puestoTrabajo = $user->cargoMedico?->detalle_cargo ?? match (true) {
+                $idTipoUsuario === null => 'Sin confirmar',
+                $tipoUsuario === 'Estudiante' => 'Estudiante',
+                default => "Personal {$tipoUsuario}",
+            };
             $lugarTrabajo = $user->lugaresDeTrabajo->first()?->nombre;
             $areaTrabajo = $lugarTrabajo ?? ($user->estudioCarrera?->facultad?->nombre ?? ($user->estudioCarrera?->carrera?->nombre ?? 'Universidad Estatal de Bolívar'));
 

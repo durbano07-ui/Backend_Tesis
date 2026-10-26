@@ -49,7 +49,7 @@ class UserResource extends JsonResource
             'roles' => $this->whenLoaded('roles', function () {
                 return $this->roles->pluck('name');
             }),
-            'id_tipo_usuario' => $this->hasAnyRole(['enfermero', 'medico_general', 'psicologo', 'odontologo', 'medico_ocupacional', 'medico_coordinador', 'administrador']) ? 1 : ($this->estudioCarrera?->id_tipo_usuario ?? 2),
+            'id_tipo_usuario' => $this->hasAnyRole(['enfermero', 'medico_general', 'psicologo', 'odontologo', 'medico_ocupacional', 'medico_coordinador', 'administrador']) ? 1 : ($this->estudioCarrera?->id_tipo_usuario), // null = el paciente aún no confirmó su tipo
             'activo' => $this->activo,
             'must_change_password' => $this->must_change_password,
             'created_at' => $this->created_at?->toIso8601String(),
