@@ -642,6 +642,8 @@ class CitasMedicasController extends Controller
             'hora_inicio' => $now->format('H:i'),
             'hora_fin' => $now->copy()->addMinutes(30)->format('H:i'),
             'estado' => 'completada',
+            // Atención sin cita previa: cuenta en reportes pero no se notifica al paciente
+            'origen' => CitaMedica::ORIGEN_ATENCION_DIRECTA,
             'motivo' => $motivo ?? 'Atención médica directa (Sin agendamiento previo)',
             'notas_doctor' => 'Atención registrada directamente por el profesional médico',
             'confirmada_por_paciente' => true,

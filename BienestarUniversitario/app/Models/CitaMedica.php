@@ -19,6 +19,11 @@ class CitaMedica extends Model
 
     protected $table = 'citas_medicas';
 
+    /** La cita la agendó el paciente o el personal */
+    public const ORIGEN_AGENDADA = 'agendada';
+    /** El profesional atendió sin cita previa: cuenta en reportes, sin notificaciones */
+    public const ORIGEN_ATENCION_DIRECTA = 'atencion_directa';
+
     protected $fillable = [
         'id_usuario_paciente',
         'id_usuario_doctor',
@@ -27,6 +32,7 @@ class CitaMedica extends Model
         'hora_inicio',
         'hora_fin',
         'estado',
+        'origen',
         'motivo',
         'notas_doctor',
         'confirmada_por_paciente',
