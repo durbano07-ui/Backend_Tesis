@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Odontologia;
 
+use App\Models\ProductoFarmacia;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreParteDiarioOdontologiaRequest extends FormRequest
 {
@@ -21,6 +23,7 @@ class StoreParteDiarioOdontologiaRequest extends FormRequest
             'detalle_diagnostico' => 'nullable|string',
             'procedimiento' => 'nullable|string|max:255',
             'prescripcion_lineas' => 'nullable|array',
+            'prescripcion_lineas.*.detalle_via_administracion' => ['nullable', Rule::in(ProductoFarmacia::VIAS_ADMINISTRACION)],
         ];
     }
 }

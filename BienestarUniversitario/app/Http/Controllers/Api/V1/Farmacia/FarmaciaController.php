@@ -7,6 +7,7 @@ use App\Models\ProductoFarmacia;
 use App\Models\StockHistory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
 
 class FarmaciaController extends Controller
@@ -85,6 +86,7 @@ class FarmaciaController extends Controller
             'codigo' => 'required|string|max:50|unique:productos_farmacia,codigo',
             'nombre' => 'required|string|max:255',
             'id_presentacion' => 'required|integer|exists:presentaciones,id',
+            'via_administracion' => ['nullable', Rule::in(ProductoFarmacia::VIAS_ADMINISTRACION)],
             'stock_inicial_cajas' => 'required|integer|min:0',
             'stock_inicial_unidades' => 'required|integer|min:0',
             'descripcion' => 'nullable|string|max:500',
@@ -96,6 +98,7 @@ class FarmaciaController extends Controller
             'codigo' => $request->codigo,
             'nombre' => $request->nombre,
             'id_presentacion' => $request->id_presentacion,
+            'via_administracion' => $request->via_administracion,
             'stock_cajas' => $request->stock_inicial_cajas,
             'stock_unidades' => $request->stock_inicial_unidades,
         ]);
@@ -137,10 +140,11 @@ class FarmaciaController extends Controller
             'codigo' => 'sometimes|required|string|max:50|unique:productos_farmacia,codigo,' . $id,
             'nombre' => 'sometimes|required|string|max:255',
             'id_presentacion' => 'sometimes|required|integer|exists:presentaciones,id',
+            'via_administracion' => ['sometimes', 'nullable', Rule::in(ProductoFarmacia::VIAS_ADMINISTRACION)],
             'activo' => 'sometimes|boolean',
         ]);
 
-        $producto->update($request->only(['codigo', 'nombre', 'id_presentacion', 'activo']));
+        $producto->update($request->only(['codigo', 'nombre', 'id_presentacion', 'via_administracion', 'activo']));
 
         return response()->json([
             'data' => $producto->load('presentacion'),

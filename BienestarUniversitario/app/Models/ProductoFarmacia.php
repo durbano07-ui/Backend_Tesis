@@ -10,10 +10,17 @@ class ProductoFarmacia extends Model
 {
     protected $table = 'productos_farmacia';
 
+    /** Lista cerrada de vías de administración (igual a src/utils/viasAdministracion.js del frontend). */
+    public const VIAS_ADMINISTRACION = [
+        'Oral', 'Sublingual', 'Tópica', 'Oftálmica', 'Ótica', 'Nasal', 'Inhalatoria', 'Rectal',
+        'Vaginal', 'Intramuscular', 'Intravenosa', 'Subcutánea', 'Intradérmica', 'Transdérmica',
+    ];
+
     protected $fillable = [
         'codigo',
         'nombre',
         'id_presentacion',
+        'via_administracion',
         'stock_cajas',
         'stock_unidades',
         'activo',

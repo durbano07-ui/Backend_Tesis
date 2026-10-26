@@ -25,6 +25,7 @@ use App\Models\OrdenDeExamenMedicoocupacional;
 use App\Models\OrdenDeExamenOtrosMedicoocupacional;
 use App\Models\OrdenDeExamenTipoMedicoocupacional;
 use App\Models\PersonalNuevoMedicoocupacional;
+use App\Models\ProductoFarmacia;
 use App\Models\RecetaCieMedicoocupacional;
 use App\Models\RecetaMedicoocupacional;
 use App\Models\RecomendacionNofarmacologicaRecetaMedicoocupacional;
@@ -37,6 +38,7 @@ use App\Models\UsuarioTipoSangre;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\View;
@@ -851,7 +853,7 @@ class MedicinaOcupacionalController extends Controller
             'detalle_dosis' => 'required|string|max:255',
             'frecuencia_horas' => 'required|integer|min:1',
             'duracion_tratamiento_dias' => 'required|integer|min:1',
-            'detalle_via_administracion' => 'required|string|max:255',
+            'detalle_via_administracion' => ['required', Rule::in(ProductoFarmacia::VIAS_ADMINISTRACION)],
             'detalle_numero_y_letras' => 'required|string|max:255',
         ]);
         $data = LineaRecetaMedicoocupacional::create($request->only([
@@ -870,7 +872,7 @@ class MedicinaOcupacionalController extends Controller
             'detalle_dosis' => 'sometimes|string|max:255',
             'frecuencia_horas' => 'sometimes|integer|min:1',
             'duracion_tratamiento_dias' => 'sometimes|integer|min:1',
-            'detalle_via_administracion' => 'sometimes|string|max:255',
+            'detalle_via_administracion' => ['sometimes', Rule::in(ProductoFarmacia::VIAS_ADMINISTRACION)],
             'detalle_numero_y_letras' => 'sometimes|string|max:255',
         ]);
         $data->update($request->only([
