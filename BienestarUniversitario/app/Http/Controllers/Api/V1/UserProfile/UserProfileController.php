@@ -575,12 +575,29 @@ class UserProfileController extends Controller
         ]);
     }
 
+    private const ORDEN_CICLOS = ['primero', 'segundo', 'tercero', 'cuarto', 'quinto', 'sexto', 'septimo', 'octavo', 'noveno', 'decimo'];
+
+    /** Ordena los ciclos por su posición (acepta palabras con o sin tilde y números). */
+    private static function ordenarCiclos($ciclos)
+    {
+        return $ciclos->sortBy(function ($ciclo) {
+            $texto = \Illuminate\Support\Str::lower(\Illuminate\Support\Str::ascii(trim((string) $ciclo->numero)));
+            if (is_numeric($texto)) {
+                return (int) $texto;
+            }
+            $pos = array_search($texto, self::ORDEN_CICLOS, true);
+
+            return $pos === false ? 100 + $ciclo->id : $pos + 1;
+        })->values();
+    }
+
     public function getCatalogos(): JsonResponse
     {
         return response()->json([
             'facultades' => \App\Models\Facultad::orderBy('nombre')->get(['id', 'nombre']),
             'carreras' => \App\Models\Carrera::orderBy('nombre')->get(['id', 'nombre', 'id_facultad']),
-            'ciclos' => \App\Models\Ciclo::orderBy('numero')->get(['id', 'numero']),
+            // Orden ordinal (Primero, Segundo…): ordenar el texto daba "Cuarto, Octavo, Primero…"
+            'ciclos' => self::ordenarCiclos(\App\Models\Ciclo::orderBy('id')->get(['id', 'numero'])),
             'tipos_usuario' => \App\Models\TipoUsuario::orderBy('nombre')->get(['id', 'nombre']),
             'etnias' => \App\Models\IdentificacionEtnica::orderBy('nombre')->get(['id', 'nombre']),
             'generos' => \App\Models\IdentificacionGenero::orderBy('nombre')->get(['id', 'nombre']),

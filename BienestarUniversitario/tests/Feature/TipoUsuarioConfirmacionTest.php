@@ -155,6 +155,24 @@ class TipoUsuarioConfirmacionTest extends TestCase
             ->assertJsonPath('data.id_tipo_usuario', null);
     }
 
+    public function test_los_ciclos_del_catalogo_salen_en_orden(): void
+    {
+        DB::table('ciclos')->delete();
+        foreach (['Cuarto', 'Octavo', 'Primero', 'Quinto', 'Segundo', 'Séptimo', 'Sexto', 'Tercero'] as $numero) {
+            DB::table('ciclos')->insert(['numero' => $numero]);
+        }
+
+        $ciclos = $this->withHeaders($this->headers($this->paciente()))
+            ->getJson('/api/v1/user-profile/catalogos')
+            ->assertOk()
+            ->json('ciclos');
+
+        $this->assertSame(
+            ['Primero', 'Segundo', 'Tercero', 'Cuarto', 'Quinto', 'Sexto', 'Séptimo', 'Octavo'],
+            array_column($ciclos, 'numero')
+        );
+    }
+
     public function test_el_formulario_de_perfil_tambien_borra_la_carrera_si_no_es_estudiante(): void
     {
         $paciente = $this->paciente(['id_tipo_usuario' => 2, 'id_facultad' => $this->facultadId, 'id_carrera' => $this->carreraId, 'id_ciclo' => $this->cicloId]);
