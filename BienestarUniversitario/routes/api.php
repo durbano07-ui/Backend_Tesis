@@ -343,6 +343,8 @@ Route::prefix('v1/medicina-ocupacional')->middleware(['auth:sanctum', 'force_pas
     Route::get('/orden-examen', [MedicinaOcupacionalController::class, 'indexOrdenExamen']);
     Route::get('/orden-examen/{id}', [MedicinaOcupacionalController::class, 'showOrdenExamen']);
     Route::get('/orden-examen/{id}/pdf', [MedicinaOcupacionalController::class, 'descargarPdfOrdenExamen']);
+    Route::post('/orden-examen/{id}/resultado', [MedicinaOcupacionalController::class, 'subirResultadoOrdenExamen']);
+    Route::get('/orden-examen/{id}/resultado', [MedicinaOcupacionalController::class, 'verResultadoOrdenExamen']);
     Route::put('/orden-examen/{id}/estado', [MedicinaOcupacionalController::class, 'updateEstadoOrdenExamen']);
     Route::post('/orden-examen', [MedicinaOcupacionalController::class, 'storeOrdenExamen']);
     Route::put('/orden-examen/{id}', [MedicinaOcupacionalController::class, 'updateOrdenExamen']);

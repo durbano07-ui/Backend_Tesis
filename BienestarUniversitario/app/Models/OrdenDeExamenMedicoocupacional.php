@@ -15,7 +15,25 @@ class OrdenDeExamenMedicoocupacional extends Model
         'fecha',
         'observaciones',
         'estado',
+        'resultado_pdf_path',
+        'resultado_pdf_nombre',
+        'resultado_subido_at',
+        'resultado_subido_por',
     ];
+
+    // La ruta interna del archivo no se expone; el PDF se obtiene por su endpoint
+    protected $hidden = ['resultado_pdf_path'];
+
+    protected $appends = ['tiene_resultado'];
+
+    protected $casts = [
+        'resultado_subido_at' => 'datetime',
+    ];
+
+    public function getTieneResultadoAttribute(): bool
+    {
+        return $this->resultado_pdf_path !== null;
+    }
 
     public function doctor(): BelongsTo
     {

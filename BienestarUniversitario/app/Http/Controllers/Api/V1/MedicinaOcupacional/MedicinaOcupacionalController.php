@@ -43,6 +43,9 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\View;
 use Dompdf\Dompdf;
 use Carbon\Carbon;
@@ -634,6 +637,10 @@ class MedicinaOcupacionalController extends Controller
             $query->whereDate('fecha', $request->fecha);
         }
 
+        if ($request->boolean('sin_resultado')) {
+            $query->whereNull('resultado_pdf_path');
+        }
+
         if ($request->filled('search')) {
             $term = $request->search;
             $query->where(function ($q) use ($term) {
@@ -737,6 +744,71 @@ class MedicinaOcupacionalController extends Controller
             'data' => $orden,
             'message' => 'Orden de examen emitida con éxito'
         ], 201);
+    }
+
+    /** Tamaño máximo del PDF de resultados, en KB */
+    private const MAX_RESULTADO_KB = 10240;
+
+    /**
+     * Adjunta el PDF con los resultados de una orden de examen. Es un documento de salud: se
+     * guarda cifrado (APP_KEY) en el disco privado, nunca en la carpeta pública. Una orden solo
+     * recibe un resultado; así no se reemplaza por error un informe ya entregado.
+     */
+    public function subirResultadoOrdenExamen(Request $request, int $id): JsonResponse
+    {
+        $orden = OrdenDeExamenMedicoocupacional::find($id);
+        if (!$orden) {
+            return response()->json(['message' => 'Orden de examen no encontrada'], 404);
+        }
+        if ($orden->resultado_pdf_path) {
+            return response()->json(['message' => 'Esta orden ya tiene un resultado adjunto.'], 409);
+        }
+
+        $request->validate([
+            'archivo' => ['required', 'file', 'mimes:pdf', 'mimetypes:application/pdf', 'max:' . self::MAX_RESULTADO_KB],
+        ], [
+            'archivo.mimes' => 'El resultado debe ser un archivo PDF.',
+            'archivo.mimetypes' => 'El resultado debe ser un archivo PDF.',
+            'archivo.max' => 'El PDF no puede superar los 10 MB.',
+        ]);
+
+        $archivo = $request->file('archivo');
+        $contenido = file_get_contents($archivo->getRealPath());
+        // Además de la extensión y el tipo MIME, se comprueba la firma real de un PDF
+        if (!str_starts_with($contenido, '%PDF-')) {
+            return response()->json(['message' => 'El archivo no es un PDF válido.', 'errors' => ['archivo' => ['El archivo no es un PDF válido.']]], 422);
+        }
+
+        $ruta = 'resultados-examenes/' . Str::uuid() . '.pdf.enc';
+        Storage::disk('local')->put($ruta, Crypt::encryptString($contenido));
+
+        $orden->update([
+            'resultado_pdf_path' => $ruta,
+            'resultado_pdf_nombre' => Str::limit(basename($archivo->getClientOriginalName()), 200, ''),
+            'resultado_subido_at' => now(),
+            'resultado_subido_por' => $request->user()->id,
+            'estado' => 'Realizado',
+        ]);
+
+        return response()->json(['data' => $orden->fresh(), 'message' => 'Resultado adjuntado'], 201);
+    }
+
+    /** Devuelve el PDF de resultados descifrado, solo al personal con acceso al módulo. */
+    public function verResultadoOrdenExamen(int $id)
+    {
+        $orden = OrdenDeExamenMedicoocupacional::find($id);
+        if (!$orden || !$orden->resultado_pdf_path || !Storage::disk('local')->exists($orden->resultado_pdf_path)) {
+            return response()->json(['message' => 'Esta orden no tiene un resultado adjunto.'], 404);
+        }
+
+        $pdf = Crypt::decryptString(Storage::disk('local')->get($orden->resultado_pdf_path));
+
+        return response($pdf, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="resultado-orden-' . $orden->id . '.pdf"',
+            'Cache-Control' => 'no-store, private',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     public function updateEstadoOrdenExamen(int $id, Request $request): JsonResponse
