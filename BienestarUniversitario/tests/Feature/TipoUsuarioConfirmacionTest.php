@@ -188,4 +188,34 @@ class TipoUsuarioConfirmacionTest extends TestCase
         $this->assertSame($this->facultadId, (int) $estudio->id_facultad); // facultad de adscripción
         $this->assertNotNull($paciente->fresh()->tipo_usuario_confirmado_at);
     }
+
+    private function estudianteConfirmado(): User
+    {
+        $paciente = $this->paciente(['id_tipo_usuario' => 2, 'id_facultad' => $this->facultadId, 'id_carrera' => $this->carreraId, 'id_ciclo' => $this->cicloId]);
+        $paciente->forceFill(['tipo_usuario_confirmado_at' => now()])->save();
+
+        return $paciente;
+    }
+
+    public function test_con_el_tipo_confirmado_aun_se_puede_cambiar_desde_el_perfil(): void
+    {
+        // El frontend pide confirmación antes de habilitar el cambio; el servidor lo permite
+        $paciente = $this->estudianteConfirmado();
+
+        $this->withHeaders($this->headers($paciente))->postJson('/api/v1/user-profile/career-study', [
+            'id_tipo_usuario' => 3,
+        ])->assertCreated();
+
+        $estudio = $paciente->estudioCarrera()->first();
+        $this->assertSame(3, (int) $estudio->id_tipo_usuario);
+        $this->assertNull($estudio->id_carrera);
+    }
+
+    public function test_el_perfil_no_acepta_el_tipo_medico(): void
+    {
+        $this->withHeaders($this->headers($this->paciente()))
+            ->postJson('/api/v1/user-profile/career-study', ['id_tipo_usuario' => 1])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('id_tipo_usuario');
+    }
 }
