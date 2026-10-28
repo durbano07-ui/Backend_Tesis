@@ -392,39 +392,8 @@ class OdontologiaController extends Controller
             \App\Http\Controllers\Api\V1\CitasMedicasController::syncAutoCita($user->id, (int)$request->id_usuario_paciente, 'odontologo', $request->procedimiento ?? 'Atención en Odontología');
         }
 
-        if ($request->has('prescripcion_lineas') && is_array($request->prescripcion_lineas) && count($request->prescripcion_lineas) > 0) {
-            $receta = \App\Models\RecetaMedicoocupacional::create([
-                'id_usuario_doctor' => $user->id,
-                'id_usuario_paciente' => $request->id_usuario_paciente,
-                'fecha' => $request->fecha ?? now()->toDateString(),
-                'estado_enfermedad' => 'agudo',
-            ]);
-
-            foreach ($request->prescripcion_lineas as $linea) {
-                if (empty($linea['detalle_medicamento'])) continue;
-
-                $freq = isset($linea['frecuencia_horas']) ? (int)$linea['frecuencia_horas'] : 8;
-                $dur = isset($linea['duracion_tratamiento_dias']) ? (int)$linea['duracion_tratamiento_dias'] : 3;
-                $dosis = $linea['detalle_dosis'] ?? '1';
-                $via = $linea['detalle_via_administracion'] ?? 'Oral';
-                $cantCajas = isset($linea['cantidad_cajas']) ? (int)$linea['cantidad_cajas'] : 1;
-                $cantUnidades = isset($linea['cantidad_unidades']) ? (int)$linea['cantidad_unidades'] : 0;
-                $prodId = $linea['id_producto_farmacia'] ?? null;
-
-                \App\Models\LineaRecetaMedicoocupacional::create([
-                    'id_receta' => $receta->id,
-                    'id_producto_farmacia' => $prodId,
-                    'detalle_medicamento' => $linea['detalle_medicamento'],
-                    'detalle_dosis' => $dosis,
-                    'frecuencia_horas' => $freq,
-                    'duracion_tratamiento_dias' => $dur,
-                    'detalle_via_administracion' => $via,
-                    'detalle_numero_y_letras' => "Cada {$freq}h por {$dur} días",
-                    'cantidad_cajas' => $cantCajas,
-                    'cantidad_unidades' => $cantUnidades,
-                    'estado_despacho' => 'pendiente',
-                ]);
-            }
+        if (is_array($request->prescripcion_lineas)) {
+            $this->guardarRecetaDelDia($user->id, (int) $request->id_usuario_paciente, $request->fecha ?? now()->toDateString(), $request->prescripcion_lineas);
         }
 
         return response()->json([
@@ -442,45 +411,70 @@ class OdontologiaController extends Controller
 
         $parte->update($request->validated());
 
-        if ($request->has('prescripcion_lineas') && is_array($request->prescripcion_lineas) && count($request->prescripcion_lineas) > 0) {
-            $receta = \App\Models\RecetaMedicoocupacional::create([
-                'id_usuario_doctor' => $user->id,
-                'id_usuario_paciente' => $parte->id_usuario_paciente,
-                'fecha' => $parte->fecha ?? now()->toDateString(),
-                'estado_enfermedad' => 'agudo',
-            ]);
-
-            foreach ($request->prescripcion_lineas as $linea) {
-                if (empty($linea['detalle_medicamento'])) continue;
-
-                $freq = isset($linea['frecuencia_horas']) ? (int)$linea['frecuencia_horas'] : 8;
-                $dur = isset($linea['duracion_tratamiento_dias']) ? (int)$linea['duracion_tratamiento_dias'] : 3;
-                $dosis = $linea['detalle_dosis'] ?? '1';
-                $via = $linea['detalle_via_administracion'] ?? 'Oral';
-                $cantCajas = isset($linea['cantidad_cajas']) ? (int)$linea['cantidad_cajas'] : 1;
-                $cantUnidades = isset($linea['cantidad_unidades']) ? (int)$linea['cantidad_unidades'] : 0;
-                $prodId = $linea['id_producto_farmacia'] ?? null;
-
-                \App\Models\LineaRecetaMedicoocupacional::create([
-                    'id_receta' => $receta->id,
-                    'id_producto_farmacia' => $prodId,
-                    'detalle_medicamento' => $linea['detalle_medicamento'],
-                    'detalle_dosis' => $dosis,
-                    'frecuencia_horas' => $freq,
-                    'duracion_tratamiento_dias' => $dur,
-                    'detalle_via_administracion' => $via,
-                    'detalle_numero_y_letras' => "Cada {$freq}h por {$dur} días",
-                    'cantidad_cajas' => $cantCajas,
-                    'cantidad_unidades' => $cantUnidades,
-                    'estado_despacho' => 'pendiente',
-                ]);
-            }
+        if (is_array($request->prescripcion_lineas)) {
+            $this->guardarRecetaDelDia($user->id, (int) $parte->id_usuario_paciente, $parte->fecha ?? now()->toDateString(), $request->prescripcion_lineas);
         }
 
         return response()->json([
             'data' => $parte->load(['paciente.datosIdentificacion']),
             'message' => 'Parte diario updated successfully',
         ]);
+    }
+
+    /**
+     * Receta del día de la atención: una por odontólogo, paciente y fecha. Guardar la atención otra
+     * vez reemplaza sus medicamentos en lugar de crear otra receta, salvo que Farmacia ya haya
+     * despachado alguno (entonces la receta no se toca).
+     */
+    private function guardarRecetaDelDia(int $doctorId, int $pacienteId, $fecha, array $lineas): void
+    {
+        $fecha = \Illuminate\Support\Carbon::parse($fecha)->toDateString();
+        $lineas = array_values(array_filter($lineas, fn ($l) => !empty($l['detalle_medicamento'])));
+
+        $receta = \App\Models\RecetaMedicoocupacional::where('id_usuario_doctor', $doctorId)
+            ->where('id_usuario_paciente', $pacienteId)
+            ->whereDate('fecha', $fecha)
+            ->first();
+
+        if ($receta) {
+            if ($receta->lineas()->where('estado_despacho', '!=', 'pendiente')->exists()) {
+                return;
+            }
+            $receta->lineas()->delete();
+            if (!$lineas) {
+                $receta->delete();
+                return;
+            }
+        } elseif (!$lineas) {
+            return;
+        } else {
+            $receta = \App\Models\RecetaMedicoocupacional::create([
+                'id_usuario_doctor' => $doctorId,
+                'id_usuario_paciente' => $pacienteId,
+                'fecha' => $fecha,
+                'estado_enfermedad' => 'agudo',
+            ]);
+        }
+
+        foreach ($lineas as $linea) {
+            $freq = isset($linea['frecuencia_horas']) ? (int) $linea['frecuencia_horas'] : 8;
+            $dur = isset($linea['duracion_tratamiento_dias']) ? (int) $linea['duracion_tratamiento_dias'] : 3;
+
+            \App\Models\LineaRecetaMedicoocupacional::create([
+                'id_receta' => $receta->id,
+                'id_producto_farmacia' => $linea['id_producto_farmacia'] ?? null,
+                'detalle_medicamento' => $linea['detalle_medicamento'],
+                'detalle_dosis' => $linea['detalle_dosis'] ?? '1',
+                'frecuencia_horas' => $freq,
+                'duracion_tratamiento_dias' => $dur,
+                'detalle_via_administracion' => $linea['detalle_via_administracion'] ?? 'Oral',
+                'detalle_numero_y_letras' => "Cada {$freq}h por {$dur} días",
+                // Las cantidades las define Farmacia al despachar
+                'cantidad_cajas' => isset($linea['cantidad_cajas']) ? (int) $linea['cantidad_cajas'] : 0,
+                'cantidad_unidades' => isset($linea['cantidad_unidades']) ? (int) $linea['cantidad_unidades'] : 0,
+                'estado_despacho' => 'pendiente',
+            ]);
+        }
     }
 
     public function destroyParteDiario(int $id): JsonResponse
@@ -717,10 +711,26 @@ class OdontologiaController extends Controller
 
         $odontograma->load(['asignaciones.pieza', 'asignaciones.carilla', 'asignaciones.estado']);
 
+        // Foto del día: la historia clínica muestra el odontograma tal como quedó en cada cita
+        \App\Models\OdontogramaHistorial::updateOrCreate(
+            ['id_usuario_paciente' => $pacienteId, 'fecha' => $fechaDefault],
+            ['asignaciones' => $odontograma->asignaciones->toArray()]
+        );
+
         return response()->json([
             'data' => $odontograma,
             'message' => 'Odontograma sincronizado exitosamente'
         ]);
+    }
+
+    /** Odontograma de cada día de atención del paciente, del más antiguo al más reciente. */
+    public function historialOdontogramaPaciente(int $pacienteId): JsonResponse
+    {
+        $historial = \App\Models\OdontogramaHistorial::where('id_usuario_paciente', $pacienteId)
+            ->orderBy('fecha')
+            ->get(['fecha', 'asignaciones']);
+
+        return response()->json(['data' => $historial, 'message' => 'Historial de odontograma retrieved']);
     }
 
 

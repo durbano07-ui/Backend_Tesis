@@ -704,6 +704,7 @@ Route::prefix('v1/odontologia')->middleware(['auth:sanctum', 'force_password_cha
     Route::get('/odontograma-paciente/{pacienteId}', [OdontologiaController::class, 'showOdontogramaPaciente']);
     Route::post('/odontograma-paciente', [OdontologiaController::class, 'storeOdontogramaPaciente']);
     Route::post('/odontograma-paciente/{pacienteId}/sync', [OdontologiaController::class, 'syncOdontogramaPaciente']);
+    Route::get('/odontograma-paciente/{pacienteId}/historial', [OdontologiaController::class, 'historialOdontogramaPaciente']);
 
     // Odontograma Asignaciones
     Route::get('/odontograma-asignaciones', [OdontologiaController::class, 'indexAsignacionOdontograma']);

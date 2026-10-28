@@ -82,6 +82,63 @@ class OdontologiaRecetasTest extends TestCase
         $this->assertSame('Ibuprofeno 400mg', $data[0]['lineas'][0]['detalle_medicamento']);
     }
 
+    private function linea(string $medicamento): array
+    {
+        return ['detalle_medicamento' => $medicamento, 'detalle_dosis' => '1 tableta', 'detalle_via_administracion' => 'Oral', 'frecuencia_horas' => 8, 'duracion_tratamiento_dias' => 3];
+    }
+
+    public function test_guardar_la_atencion_dos_veces_deja_una_sola_receta_con_los_ultimos_medicamentos(): void
+    {
+        $odontologo = $this->usuario('odontologo');
+        $paciente = $this->usuario('paciente');
+        $headers = ['Authorization' => 'Bearer ' . $odontologo->createToken('t')->plainTextToken];
+        $parte = ['id_usuario_paciente' => $paciente->id, 'fecha' => '2026-10-28', 'tipo_atencion' => 'primaria', 'tipo_atencion2' => 'curativo'];
+
+        $id = $this->withHeaders($headers)->postJson('/api/v1/odontologia/parte-diario-odontologia', $parte + [
+            'prescripcion_lineas' => [$this->linea('Ibuprofeno 400mg')],
+        ])->assertCreated()->json('data.id');
+
+        $this->withHeaders($headers)->putJson("/api/v1/odontologia/parte-diario-odontologia/$id", $parte + [
+            'prescripcion_lineas' => [$this->linea('Ibuprofeno 400mg'), $this->linea('Amoxicilina 500mg')],
+        ])->assertOk();
+
+        $recetas = RecetaMedicoocupacional::with('lineas')->where('id_usuario_paciente', $paciente->id)->get();
+        $this->assertCount(1, $recetas);
+        $this->assertSame(['Ibuprofeno 400mg', 'Amoxicilina 500mg'], $recetas[0]->lineas->pluck('detalle_medicamento')->all());
+        $this->assertSame(0, (int) $recetas[0]->lineas[0]->cantidad_cajas);
+    }
+
+    public function test_una_receta_ya_despachada_no_se_modifica(): void
+    {
+        $odontologo = $this->usuario('odontologo');
+        $paciente = $this->usuario('paciente');
+        $receta = $this->receta($odontologo, $paciente, '2026-10-28', 'Ibuprofeno 400mg');
+        $receta->lineas()->update(['estado_despacho' => 'despachado']);
+        $headers = ['Authorization' => 'Bearer ' . $odontologo->createToken('t')->plainTextToken];
+
+        $this->withHeaders($headers)->postJson('/api/v1/odontologia/parte-diario-odontologia', [
+            'id_usuario_paciente' => $paciente->id, 'fecha' => '2026-10-28', 'tipo_atencion' => 'primaria', 'tipo_atencion2' => 'curativo',
+            'prescripcion_lineas' => [$this->linea('Amoxicilina 500mg')],
+        ])->assertCreated();
+
+        $this->assertSame(['Ibuprofeno 400mg'], $receta->lineas()->pluck('detalle_medicamento')->all());
+    }
+
+    public function test_guardar_el_odontograma_deja_la_foto_del_dia(): void
+    {
+        $odontologo = $this->usuario('odontologo');
+        $paciente = $this->usuario('paciente');
+        $headers = ['Authorization' => 'Bearer ' . $odontologo->createToken('t')->plainTextToken];
+
+        $this->withHeaders($headers)->postJson("/api/v1/odontologia/odontograma-paciente/{$paciente->id}/sync", ['asignaciones' => []])->assertOk();
+        $this->withHeaders($headers)->postJson("/api/v1/odontologia/odontograma-paciente/{$paciente->id}/sync", ['asignaciones' => []])->assertOk();
+
+        $historial = $this->withHeaders($headers)->getJson("/api/v1/odontologia/odontograma-paciente/{$paciente->id}/historial")
+            ->assertOk()->json('data');
+        $this->assertCount(1, $historial); // una foto por día, la última
+        $this->assertSame(now()->toDateString(), $historial[0]['fecha']);
+    }
+
     public function test_exige_el_paciente(): void
     {
         $token = $this->usuario('odontologo')->createToken('t')->plainTextToken;
