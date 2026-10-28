@@ -678,6 +678,7 @@ Route::prefix('v1/odontologia')->middleware(['auth:sanctum', 'force_password_cha
     // Parte Diario Odontologia
     Route::get('/parte-diario-odontologia', [OdontologiaController::class, 'indexParteDiario']);
     Route::get('/parte-diario-odontologia/{id}', [OdontologiaController::class, 'showParteDiario']);
+    Route::get('/recetas', [OdontologiaController::class, 'indexRecetas']);
     Route::post('/parte-diario-odontologia', [OdontologiaController::class, 'storeParteDiario']);
     Route::put('/parte-diario-odontologia/{id}', [OdontologiaController::class, 'updateParteDiario']);
     Route::delete('/parte-diario-odontologia/{id}', [OdontologiaController::class, 'destroyParteDiario']);

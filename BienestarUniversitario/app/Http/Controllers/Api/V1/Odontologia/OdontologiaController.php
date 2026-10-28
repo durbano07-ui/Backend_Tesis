@@ -342,6 +342,29 @@ class OdontologiaController extends Controller
         return response()->json(['data' => $partes, 'message' => 'Partes diarios retrieved']);
     }
 
+    /**
+     * Recetas emitidas en Odontología a un paciente, con sus medicamentos. La receta se guarda junto
+     * al parte diario sin enlazarlo, así que la atención se identifica por la fecha (?fecha=Y-m-d).
+     */
+    public function indexRecetas(Request $request): JsonResponse
+    {
+        $request->validate([
+            'id_usuario_paciente' => 'required|integer|exists:users,id',
+            'fecha' => 'nullable|date_format:Y-m-d',
+        ]);
+
+        $query = $this->historyQuery(\App\Models\RecetaMedicoocupacional::class, $request)
+            ->with(['lineas', 'doctor.datosIdentificacion']);
+        if ($request->filled('fecha')) {
+            $query->whereDate('fecha', $request->fecha);
+        }
+
+        return response()->json([
+            'data' => $query->orderByDesc('fecha')->orderByDesc('id')->get(),
+            'message' => 'Recetas de odontología retrieved',
+        ]);
+    }
+
     public function showParteDiario(int $id): JsonResponse
     {
         $user = Auth::user();
