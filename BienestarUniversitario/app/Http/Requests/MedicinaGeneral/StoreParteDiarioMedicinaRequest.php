@@ -19,6 +19,8 @@ class StoreParteDiarioMedicinaRequest extends FormRequest
             'tipo_atencion' => ['required', 'in:primaria,secundaria,certificadomedico,validacion'],
             'tipo' => ['required', 'in:curativo,preventivo'],
             'detalle_diagnostico' => ['nullable', 'string'],
+            'prescripcion_lineas' => ['nullable', 'array'],
+            'prescripcion_lineas.*.detalle_via_administracion' => ['nullable', \Illuminate\Validation\Rule::in(\App\Models\ProductoFarmacia::VIAS_ADMINISTRACION)],
         ];
     }
 }

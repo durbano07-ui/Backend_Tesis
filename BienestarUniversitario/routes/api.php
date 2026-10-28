@@ -281,6 +281,7 @@ Route::prefix('v1/medicina-general')->middleware(['auth:sanctum', 'force_passwor
     Route::delete('/planes-terapeuticos/{id}', [MedicinaGeneralController::class, 'destroyPlanTerapeutico']);
 
     // Historial Evolucion
+    Route::get('/recetas', [MedicinaGeneralController::class, 'indexRecetas']);
     Route::get('/historial-evolucion', [MedicinaGeneralController::class, 'indexHistorialEvolucion']);
     Route::get('/historial-evolucion/{id}', [MedicinaGeneralController::class, 'showHistorialEvolucion']);
     Route::post('/historial-evolucion', [MedicinaGeneralController::class, 'storeHistorialEvolucion']);

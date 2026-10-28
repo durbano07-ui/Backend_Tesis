@@ -32,6 +32,7 @@ use Illuminate\Support\Facades\Auth;
 class MedicinaGeneralController extends Controller
 {
     use \App\Http\Controllers\Concerns\ScopesHistoryByDepartment;
+    use \App\Http\Controllers\Concerns\GuardaRecetaDelDia;
 
     // ==========================================
     // SIGNOS VITALES (el médico puede crear y modificar)
@@ -191,8 +192,12 @@ class MedicinaGeneralController extends Controller
 
         $parte = ParteDiarioMedicina::create([
             'id_usuario_doctor' => $user->id,
-            ...$request->validated(),
+            ...$request->safe()->except('prescripcion_lineas'),
         ]);
+
+        if (is_array($request->prescripcion_lineas)) {
+            $this->guardarRecetaDelDia($user->id, (int) $parte->id_usuario_paciente, $parte->fecha, $request->prescripcion_lineas);
+        }
 
         if (!empty($parte->id_usuario_paciente)) {
             // Este endpoint también lo usa el médico ocupacional: la cita debe quedar con su rol
@@ -222,7 +227,11 @@ class MedicinaGeneralController extends Controller
             return response()->json(['message' => 'Parte diario not found'], 404);
         }
 
-        $parte->update($request->validated());
+        $parte->update($request->safe()->except('prescripcion_lineas'));
+
+        if (is_array($request->prescripcion_lineas)) {
+            $this->guardarRecetaDelDia($user->id, (int) $parte->id_usuario_paciente, $parte->fecha, $request->prescripcion_lineas);
+        }
 
         return response()->json([
             'data' => $parte->load(['paciente.datosIdentificacion']),

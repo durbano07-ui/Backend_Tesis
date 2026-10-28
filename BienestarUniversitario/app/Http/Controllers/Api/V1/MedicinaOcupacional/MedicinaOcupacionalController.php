@@ -132,6 +132,7 @@ class MedicinaOcupacionalController extends Controller
             ->get()
             ->map(fn (RecetaMedicoocupacional $r) => [
                 'id' => $r->id,
+                'id_usuario_paciente' => $r->id_usuario_paciente,
                 'fecha' => $r->fecha?->format('Y-m-d'),
                 'cie' => $r->cie10s->pluck('detalle_cie10')->implode(', '),
                 'paciente' => $this->identificacionTrabajador($r->paciente),
