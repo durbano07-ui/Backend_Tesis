@@ -66,6 +66,28 @@ class MedicinaGeneralRecetasTest extends TestCase
         $this->assertSame(['Paracetamol 500mg', 'Loratadina 10mg'], array_column($data[0]['lineas'], 'detalle_medicamento'));
     }
 
+    public function test_el_paciente_ve_solo_sus_recetas(): void
+    {
+        $medico = $this->usuario('medico_general');
+        $paciente = $this->usuario('paciente');
+        $otro = $this->usuario('paciente');
+        $headers = ['Authorization' => 'Bearer ' . $medico->createToken('t')->plainTextToken];
+        foreach ([$paciente, $otro] as $p) {
+            $this->withHeaders($headers)->postJson('/api/v1/medicina-general/parte-diario', [
+                'id_usuario_paciente' => $p->id, 'fecha' => '2026-10-28', 'tipo_atencion' => 'primaria', 'tipo' => 'curativo',
+                'prescripcion_lineas' => [$this->linea("Medicamento de {$p->id}")],
+            ])->assertCreated();
+        }
+
+        // Aunque pida las del otro paciente, el servidor fuerza las suyas
+        $data = $this->withHeaders(['Authorization' => 'Bearer ' . $paciente->createToken('t')->plainTextToken])
+            ->getJson("/api/v1/medicina-general/recetas?id_usuario_paciente={$otro->id}&fecha=2026-10-28")
+            ->assertOk()->json('data');
+
+        $this->assertCount(1, $data);
+        $this->assertSame("Medicamento de {$paciente->id}", $data[0]['lineas'][0]['detalle_medicamento']);
+    }
+
     public function test_el_parte_sin_medicamentos_no_crea_receta(): void
     {
         $medico = $this->usuario('medico_general');

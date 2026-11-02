@@ -45,9 +45,9 @@ class RestrictPatientAccess
      * Historial clínico de solo lectura que ve el propio paciente en su portal.
      * El filtro id_usuario_paciente se fuerza al usuario autenticado.
      */
-    private const PATIENT_OWN_HISTORY = '#^(medicina-general/(historial-evolucion|parte-diario|signos-vitales|examen-fisico|antecedentes)'
+    private const PATIENT_OWN_HISTORY = '#^(medicina-general/(historial-evolucion|parte-diario|signos-vitales|examen-fisico|antecedentes|recetas)'
         . '|psicologia/(historial-evolucion|parte-diario)'
-        . '|odontologia/(historial-evolucion|parte-diario-odontologia)'
+        . '|odontologia/(historial-evolucion|parte-diario-odontologia|recetas)'
         . '|enfermeria/(signos-vitales|parte-diario))$#';
 
     public function handle(Request $request, Closure $next): Response
