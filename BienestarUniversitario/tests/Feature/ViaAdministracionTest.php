@@ -35,7 +35,7 @@ class ViaAdministracionTest extends TestCase
     {
         return [
             'codigo' => 'PARA-500', 'nombre' => 'Paracetamol 500 mg', 'id_presentacion' => $this->presentacionId,
-            'stock_inicial_cajas' => 2, 'stock_inicial_unidades' => 0,
+            'stock_inicial_cajas' => 2, 'stock_inicial_unidades' => 0, 'unidades_por_caja' => 10,
         ] + $extra;
     }
 

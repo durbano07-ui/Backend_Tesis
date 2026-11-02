@@ -2430,6 +2430,19 @@ class MedicinaOcupacionalController extends Controller
         $cajas = (int) ($request->cantidad_cajas ?? 0);
         $unidades = (int) ($request->cantidad_unidades ?? 1);
 
+        // Antes se marcaba como despachado aunque el inventario no alcanzara (el descuento fallaba en silencio)
+        $producto = $linea->id_producto_farmacia ? \App\Models\ProductoFarmacia::find($linea->id_producto_farmacia) : null;
+        if ($producto && !$producto->tieneStock($cajas, $unidades)) {
+            return response()->json([
+                'message' => 'Stock insuficiente en Farmacia para despachar esta cantidad.',
+                'stock_actual' => [
+                    'cajas' => $producto->stock_cajas,
+                    'unidades' => $producto->stock_unidades,
+                    'total_unidades' => $producto->stock_total_unidades,
+                ],
+            ], 422);
+        }
+
         $linea->update([
             'estado_despacho' => 'despachado',
             'despachado_por' => $user->id,
@@ -2440,11 +2453,8 @@ class MedicinaOcupacionalController extends Controller
         ]);
 
         // Si la línea tiene un producto de farmacia vinculado, reducir stock
-        if ($linea->id_producto_farmacia) {
-            $producto = \App\Models\ProductoFarmacia::find($linea->id_producto_farmacia);
-            if ($producto) {
-                $producto->reducirStock($cajas, $unidades, $user, $request->observaciones ?? 'Despacho de receta', $linea->id);
-            }
+        if ($producto) {
+            $producto->reducirStock($cajas, $unidades, $user, $request->observaciones ?? 'Despacho de receta', $linea->id);
         }
 
         return response()->json([

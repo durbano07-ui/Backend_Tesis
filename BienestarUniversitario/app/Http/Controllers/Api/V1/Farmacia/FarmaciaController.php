@@ -40,10 +40,9 @@ class FarmaciaController extends Controller
 
         // Filtro por stock bajo
         if ($request->boolean('low_stock')) {
-            $umbral = $request->get('umbral', 10);
+            $umbral = (int) $request->get('umbral', ProductoFarmacia::UMBRAL_STOCK_BAJO);
             $query->where(function ($q) use ($umbral) {
-                $q->where('stock_cajas', '<=', $umbral)
-                  ->orWhere('stock_unidades', '<=', $umbral);
+                $q->stockBajo($umbral);
             });
         }
 
@@ -88,7 +87,9 @@ class FarmaciaController extends Controller
             'id_presentacion' => 'required|integer|exists:presentaciones,id',
             'via_administracion' => ['nullable', Rule::in(ProductoFarmacia::VIAS_ADMINISTRACION)],
             'stock_inicial_cajas' => 'required|integer|min:0',
+            // Unidades sueltas (de una caja abierta) además de las cajas cerradas
             'stock_inicial_unidades' => 'required|integer|min:0',
+            'unidades_por_caja' => 'required|integer|min:1',
             'descripcion' => 'nullable|string|max:500',
         ]);
 
@@ -101,6 +102,7 @@ class FarmaciaController extends Controller
             'via_administracion' => $request->via_administracion,
             'stock_cajas' => $request->stock_inicial_cajas,
             'stock_unidades' => $request->stock_inicial_unidades,
+            'unidades_por_caja' => $request->unidades_por_caja,
         ]);
 
         // Registrar movimiento inicial si hay stock
@@ -141,10 +143,11 @@ class FarmaciaController extends Controller
             'nombre' => 'sometimes|required|string|max:255',
             'id_presentacion' => 'sometimes|required|integer|exists:presentaciones,id',
             'via_administracion' => ['sometimes', 'nullable', Rule::in(ProductoFarmacia::VIAS_ADMINISTRACION)],
+            'unidades_por_caja' => 'sometimes|nullable|integer|min:1',
             'activo' => 'sometimes|boolean',
         ]);
 
-        $producto->update($request->only(['codigo', 'nombre', 'id_presentacion', 'via_administracion', 'activo']));
+        $producto->update($request->only(['codigo', 'nombre', 'id_presentacion', 'via_administracion', 'unidades_por_caja', 'activo']));
 
         return response()->json([
             'data' => $producto->load('presentacion'),
@@ -202,10 +205,14 @@ class FarmaciaController extends Controller
         }
 
         $request->validate([
-            'cantidad_cajas' => 'required|integer|min:1',
-            'cantidad_unidades' => 'required|integer|min:1',
+            'cantidad_cajas' => 'required|integer|min:0',
+            'cantidad_unidades' => 'required|integer|min:0',
             'descripcion' => 'nullable|string|max:500',
         ]);
+        // Antes se exigía al menos 1 caja y 1 unidad a la vez; basta con cualquiera de las dos
+        if ($request->cantidad_cajas + $request->cantidad_unidades < 1) {
+            return response()->json(['message' => 'Indique al menos una caja o una unidad.', 'errors' => ['cantidad_unidades' => ['Indique al menos una caja o una unidad.']]], 422);
+        }
 
         $user = Auth::user();
         $historial = $producto->agregarStock(
@@ -236,10 +243,14 @@ class FarmaciaController extends Controller
         }
 
         $request->validate([
-            'cantidad_cajas' => 'required|integer|min:1',
-            'cantidad_unidades' => 'required|integer|min:1',
+            'cantidad_cajas' => 'required|integer|min:0',
+            'cantidad_unidades' => 'required|integer|min:0',
             'descripcion' => 'nullable|string|max:500',
         ]);
+        // Antes se exigía al menos 1 caja y 1 unidad a la vez; basta con cualquiera de las dos
+        if ($request->cantidad_cajas + $request->cantidad_unidades < 1) {
+            return response()->json(['message' => 'Indique al menos una caja o una unidad.', 'errors' => ['cantidad_unidades' => ['Indique al menos una caja o una unidad.']]], 422);
+        }
 
         // Verificar stock suficiente
         if (!$producto->tieneStock($request->cantidad_cajas, $request->cantidad_unidades)) {
@@ -248,6 +259,7 @@ class FarmaciaController extends Controller
                 'stock_actual' => [
                     'cajas' => $producto->stock_cajas,
                     'unidades' => $producto->stock_unidades,
+                    'total_unidades' => $producto->stock_total_unidades,
                 ]
             ], 400);
         }
@@ -340,6 +352,7 @@ class FarmaciaController extends Controller
                 'disponible' => $disponible,
                 'stock_actual_cajas' => $producto->stock_cajas,
                 'stock_actual_unidades' => $producto->stock_unidades,
+                'stock_total_unidades' => $producto->stock_total_unidades,
             ],
             'message' => $disponible ? 'Stock disponible' : 'Stock insuficiente'
         ]);
@@ -350,14 +363,11 @@ class FarmaciaController extends Controller
      */
     public function lowStock(Request $request): JsonResponse
     {
-        $umbral = $request->get('umbral', 10);
+        $umbral = (int) $request->get('umbral', ProductoFarmacia::UMBRAL_STOCK_BAJO);
 
         $productos = ProductoFarmacia::with('presentacion')
             ->where('activo', true)
-            ->where(function ($query) use ($umbral) {
-                $query->where('stock_cajas', '<=', $umbral)
-                      ->orWhere('stock_unidades', '<=', $umbral);
-            })
+            ->stockBajo($umbral)
             ->orderBy('stock_cajas')
             ->get();
 
@@ -383,9 +393,7 @@ class FarmaciaController extends Controller
                 'total_productos' => $productos->count(),
                 'total_cajas' => $productos->sum('stock_cajas'),
                 'total_unidades' => $productos->sum('stock_unidades'),
-                'productos_stock_bajo' => $productos->filter(function ($p) {
-                    return $p->stock_cajas <= 10 || $p->stock_unidades <= 10;
-                })->count(),
+                'productos_stock_bajo' => $productos->filter(fn ($p) => $p->esStockBajo())->count(),
             ],
             'por_presentacion' => $productos->groupBy('presentacion.nombre')->map(function ($items, $nombre) {
                 return [
