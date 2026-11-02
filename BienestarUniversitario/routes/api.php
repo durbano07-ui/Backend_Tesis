@@ -639,6 +639,7 @@ Route::prefix('v1/odontologia')->middleware(['auth:sanctum', 'force_password_cha
     // Procedimientos
     Route::get('/procedimientos', [OdontologiaController::class, 'indexProcedimientos']);
     Route::post('/procedimientos', [OdontologiaController::class, 'storeProcedimiento']);
+    Route::put('/procedimientos/{id}', [OdontologiaController::class, 'updateProcedimiento']);
     Route::delete('/procedimientos/{id}', [OdontologiaController::class, 'destroyProcedimiento']);
 
     // Motivo Consulta

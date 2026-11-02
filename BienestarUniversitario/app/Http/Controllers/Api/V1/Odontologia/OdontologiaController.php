@@ -750,18 +750,7 @@ class OdontologiaController extends Controller
 
         // Si el catálogo está vacío para este doctor, se cargan procedimientos predeterminados
         if ($procedimientos->isEmpty()) {
-            $defaultNames = [
-                'Profilaxis',
-                'Fluorización',
-                'Destartraje',
-                'Rest. Provisional',
-                'Rest. con Resina',
-                'Desgaste',
-                'Exodoncias',
-                'Receta',
-                'Orden de RX'
-            ];
-            foreach ($defaultNames as $name) {
+            foreach (\App\Models\ProcedimientoOdontologia::PREDETERMINADOS as $name) {
                 \App\Models\ProcedimientoOdontologia::create([
                     'id_usuario_doctor' => $user->id,
                     'nombre_procedimiento' => $name,
@@ -784,6 +773,22 @@ class OdontologiaController extends Controller
             'nombre_procedimiento' => $request->nombre_procedimiento,
         ]);
         return response()->json(['data' => $procedimiento, 'message' => 'Procedimiento created successfully'], 201);
+    }
+
+    /** Renombra un procedimiento del catálogo propio (también los predeterminados). */
+    public function updateProcedimiento(Request $request, int $id): JsonResponse
+    {
+        $request->validate([
+            'nombre_procedimiento' => 'required|string|max:255',
+        ]);
+        $procedimiento = \App\Models\ProcedimientoOdontologia::where('id', $id)
+            ->where('id_usuario_doctor', Auth::id())->first();
+        if (!$procedimiento) {
+            return response()->json(['message' => 'Procedimiento not found'], 404);
+        }
+        $procedimiento->update(['nombre_procedimiento' => trim($request->nombre_procedimiento)]);
+
+        return response()->json(['data' => $procedimiento, 'message' => 'Procedimiento updated successfully']);
     }
 
     public function destroyProcedimiento(int $id): JsonResponse
