@@ -74,6 +74,9 @@ class AuthController extends Controller
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
+                // Nombre real de la persona (datos de identificación) para firmas y reportes;
+                // "name" es el nombre de la cuenta y puede ser genérico ("Psicólogo Demo").
+                'nombre_completo' => $user->nombreCompleto(),
                 'email' => $user->email,
                 'roles' => $user->getRoleNames(),
             ],

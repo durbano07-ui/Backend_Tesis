@@ -33,6 +33,27 @@ class AuthControllerTest extends TestCase
             ]);
     }
 
+    public function test_login_devuelve_el_nombre_completo_de_la_identificacion(): void
+    {
+        $user = User::factory()->create([
+            'name' => 'Psicólogo Demo',
+            'email' => 'psico@ueb.edu.ec',
+            'password' => Hash::make('secret123'),
+            'activo' => true,
+        ]);
+        \App\Models\DatosIdentificacion::create([
+            'id_usuario' => $user->id,
+            'primer_nombre' => 'Gabriela', 'segundo_nombre' => 'Lucía',
+            'apellido_paterno' => 'Vargas', 'apellido_materno' => 'Morales',
+        ]);
+
+        // Los reportes y firmas usan este nombre, no el de la cuenta
+        $this->postJson('/api/v1/auth/login', ['email' => 'psico@ueb.edu.ec', 'password' => 'secret123'])
+            ->assertOk()
+            ->assertJsonPath('user.nombre_completo', 'Gabriela Lucía Vargas Morales')
+            ->assertJsonPath('user.name', 'Psicólogo Demo');
+    }
+
     public function test_login_fails_with_wrong_password(): void
     {
         $user = User::factory()->create([

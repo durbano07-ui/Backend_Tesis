@@ -77,6 +77,15 @@ class User extends Authenticatable
         return $this->hasOne(DatosIdentificacion::class, 'id_usuario');
     }
 
+    /** Nombre completo según los datos de identificación; si no los tiene, el nombre de la cuenta. */
+    public function nombreCompleto(): string
+    {
+        $d = $this->datosIdentificacion;
+        $nombre = $d ? trim(implode(' ', array_filter([$d->primer_nombre, $d->segundo_nombre, $d->apellido_paterno, $d->apellido_materno]))) : '';
+
+        return $nombre !== '' ? $nombre : (string) $this->name;
+    }
+
     public function hijos(): HasMany
     {
         return $this->hasMany(UsuarioTieneHijo::class, 'id_usuario');
