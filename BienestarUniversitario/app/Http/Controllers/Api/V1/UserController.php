@@ -306,6 +306,30 @@ class UserController extends Controller
         ], 200);
     }
 
+    private static function normalizarNombre(?string $nombre): string
+    {
+        return mb_strtolower(preg_replace('/\s+/', ' ', trim((string) $nombre)));
+    }
+
+    /**
+     * Reparte un nombre completo en los cuatro campos de identificación según la convención
+     * ecuatoriana (dos nombres y dos apellidos): 4+ palabras → 2 nombres + apellidos;
+     * 3 → 1 nombre + 2 apellidos; 2 → nombre + apellido.
+     */
+    private static function separarNombreCompleto(string $nombre): array
+    {
+        $p = preg_split('/\s+/', trim($nombre));
+        $n = count($p);
+        if ($n >= 4) {
+            return ['primer_nombre' => $p[0], 'segundo_nombre' => $p[1], 'apellido_paterno' => $p[2], 'apellido_materno' => implode(' ', array_slice($p, 3))];
+        }
+        if ($n === 3) {
+            return ['primer_nombre' => $p[0], 'segundo_nombre' => null, 'apellido_paterno' => $p[1], 'apellido_materno' => $p[2]];
+        }
+
+        return ['primer_nombre' => $p[0] ?? '', 'segundo_nombre' => null, 'apellido_paterno' => $p[1] ?? '', 'apellido_materno' => null];
+    }
+
     /**
      * Update the specified user.
      */
@@ -321,23 +345,22 @@ class UserController extends Controller
         $oldRoles = $user->getRoleNames()->toArray();
 
         if ($request->has('name')) {
+            $identificacion = $user->datosIdentificacion;
+            $nombreActual = $identificacion
+                ? implode(' ', array_filter([$identificacion->primer_nombre, $identificacion->segundo_nombre, $identificacion->apellido_paterno, $identificacion->apellido_materno]))
+                : $user->name;
             $user->name = $request->name;
 
-            $nameParts = preg_split('/\s+/', trim($request->name));
-            $pNombre = $nameParts[0] ?? '';
-            $pApellido = count($nameParts) > 1 ? implode(' ', array_slice($nameParts, 1)) : '';
-
-            $identificacion = $user->datosIdentificacion;
-            if ($identificacion) {
-                $identificacion->primer_nombre = $pNombre;
-                $identificacion->apellido_paterno = $pApellido;
-                $identificacion->save();
-            } else {
-                DatosIdentificacion::create([
-                    'id_usuario' => $user->id,
-                    'primer_nombre' => $pNombre,
-                    'apellido_paterno' => $pApellido,
-                ]);
+            // El formulario de edición siempre envía el nombre: si no cambió, la identificación no se
+            // toca. Antes se reescribían primer nombre y apellido sin limpiar el segundo nombre ni el
+            // segundo apellido, y el nombre quedaba duplicado ("Roberto Esteban Esteban Silva Paz Paz").
+            if (self::normalizarNombre($request->name) !== self::normalizarNombre($nombreActual)) {
+                $partes = self::separarNombreCompleto($request->name);
+                if ($identificacion) {
+                    $identificacion->fill($partes)->save();
+                } else {
+                    DatosIdentificacion::create(['id_usuario' => $user->id] + $partes);
+                }
             }
         }
         if ($request->has('email')) {
