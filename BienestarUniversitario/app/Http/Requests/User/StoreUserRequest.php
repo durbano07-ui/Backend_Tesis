@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\User;
 
+use App\Support\CorreoInstitucional;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -52,7 +53,7 @@ class StoreUserRequest extends FormRequest
                 'email',
                 'max:255',
                 Rule::unique('users', 'email'),
-                'regex:/@ueb\.edu\.ec$/i',
+                CorreoInstitucional::REGLA,
             ],
             'roles' => ['required', 'array', 'min:1'],
             'roles.*' => ['string', 'exists:roles,name'],
@@ -82,7 +83,7 @@ class StoreUserRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'email.regex' => 'Only institutional emails (@ueb.edu.ec) are allowed',
+            'email.regex' => 'Only institutional emails (' . CorreoInstitucional::texto(' or ') . ') are allowed',
             'email.unique' => 'Email already registered',
             'roles.*.exists' => 'Invalid role for this action',
         ];

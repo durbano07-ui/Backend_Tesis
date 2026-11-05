@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Auth;
 
 use Illuminate\Validation\Rules\Password;
+use App\Support\CorreoInstitucional;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -30,7 +31,7 @@ class RegisterRequest extends FormRequest
                 'email',
                 'max:255',
                 Rule::unique('users', 'email'),
-                'regex:/@ueb\.edu\.ec$/i',
+                CorreoInstitucional::REGLA,
             ],
             'password' => [
                 'required',
@@ -46,7 +47,7 @@ class RegisterRequest extends FormRequest
         return [
             'email.required' => 'El email es obligatorio',
             'email.email' => 'El formato del email no es válido',
-            'email.regex' => 'Solo se permiten correos institucionales (@ueb.edu.ec)',
+            'email.regex' => 'Solo se permiten correos institucionales (' . CorreoInstitucional::texto() . ')',
             'email.unique' => 'Este email ya está registrado',
             'password.required' => 'La contraseña es obligatoria',
             'password.min' => 'La contraseña debe tener al menos 8 caracteres',

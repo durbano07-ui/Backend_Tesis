@@ -124,6 +124,35 @@ class AuthControllerTest extends TestCase
         ]);
     }
 
+    public function test_register_acepta_el_dominio_mailes(): void
+    {
+        Role::create(['name' => 'paciente', 'guard_name' => 'sanctum']);
+
+        $this->postJson('/api/v1/auth/register', [
+            'email' => 'estudiante@mailes.ueb.edu.ec',
+            'password' => 'SecurePass123!',
+            'password_confirmation' => 'SecurePass123!',
+        ])->assertStatus(201);
+
+        $this->assertDatabaseHas('users', ['email' => 'estudiante@mailes.ueb.edu.ec']);
+
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'estudiante@mailes.ueb.edu.ec',
+            'password' => 'SecurePass123!',
+        ])->assertOk();
+    }
+
+    public function test_register_rechaza_otros_subdominios_de_ueb(): void
+    {
+        foreach (['ana@otro.ueb.edu.ec', 'ana@mailesueb.edu.ec', 'ana@mailes.ueb.edu.ec.com'] as $correo) {
+            $this->postJson('/api/v1/auth/register', [
+                'email' => $correo,
+                'password' => 'SecurePass123!',
+                'password_confirmation' => 'SecurePass123!',
+            ])->assertStatus(422)->assertJsonValidationErrors(['email']);
+        }
+    }
+
     public function test_register_fails_with_weak_password(): void
     {
         $response = $this->postJson('/api/v1/auth/register', [
